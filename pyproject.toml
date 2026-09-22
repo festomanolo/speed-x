@@ -4,10 +4,10 @@ requires = ["hatchling==1.31.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "laya-coreml"
-version = "0.1.1"
-description = "Local Laya typed decisions on Apple Core ML and Neural Engine, with a live Snake demo"
-keywords = ["coreml", "neural-engine", "laya", "decision-model", "apple-silicon", "local-ai"]
+name = "speed-x"
+version = "1.0.0"
+description = "Local Speed-X typed decisions on Apple Core ML and Neural Engine with Liquid Glass macOS assistant"
+keywords = ["coreml", "neural-engine", "speed-x", "decision-model", "apple-silicon", "local-ai"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
@@ -18,7 +18,14 @@ classifiers = [
 requires-python = ">=3.11,<3.14"
 license = "Apache-2.0"
 readme = "README.md"
-dependencies = ["coremltools>=9,<10", "numpy>=1.26,<2.2", "tokenizers>=0.21,<1", "huggingface-hub>=0.34,<2", "safetensors>=0.6"]
+dependencies = [
+    "coremltools>=9,<10",
+    "numpy>=1.26,<2.2",
+    "tokenizers>=0.21,<1",
+    "huggingface-hub>=0.34,<2",
+    "safetensors>=0.6",
+    "rumps>=0.4.0",
+]
 
 [project.optional-dependencies]
 convert = ["torch==2.7.0", "safetensors>=0.6"]
@@ -29,18 +36,20 @@ demo = ["rich>=15,<16", "Pillow>=12,<13"]
 publish = ["twine>=6,<7"]
 
 [project.scripts]
+speed-x = "main:main"
+speedx = "main:main"
 laya-coreml = "laya_coreml.cli:main"
 laya-coreml-snake = "laya_coreml.snake.cli:main"
 
 [project.urls]
-Repository = "https://github.com/mizorewww/laya-coreml"
+Repository = "https://github.com/festomanolo/speed-x"
 Upstream = "https://github.com/NandhaKishorM/laya"
-Documentation = "https://github.com/mizorewww/laya-coreml#readme"
-Issues = "https://github.com/mizorewww/laya-coreml/issues"
-Benchmarks = "https://github.com/mizorewww/laya-coreml/blob/main/docs/ANE_BENCHMARKS.md"
+Documentation = "https://github.com/festomanolo/speed-x#readme"
+Issues = "https://github.com/festomanolo/speed-x/issues"
+Benchmarks = "https://github.com/festomanolo/speed-x/blob/main/docs/ANE_BENCHMARKS.md"
 
 [tool.hatch.build.targets.wheel]
-packages = ["laya_coreml"]
+packages = ["speed_x", "laya_coreml"]
 
 [tool.hatch.build.targets.sdist]
 include = ["/laya_coreml", "/README.md", "/LICENSE", "/NOTICE", "/pyproject.toml"]
