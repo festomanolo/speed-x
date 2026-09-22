@@ -121,11 +121,29 @@ public class VoiceGlowBeamView: NSView {
         let breathe = (sin(clockTime * (2.0 * .pi / 5.2)) + 1.0) / 2.0
         let effectiveIdle = idle * (0.8 + 0.2 * breathe)
 
+        ctx.saveGState()
+
+        // Double-bezel hardware track container
+        let trackRect = bounds.insetBy(dx: 1, dy: 1)
+        let trackPath = NSBezierPath(roundedRect: trackRect, xRadius: 10, yRadius: 10)
+        let trackFill = isDarkMode ? NSColor(calibratedWhite: 1.0, alpha: 0.08) : NSColor(calibratedWhite: 1.0, alpha: 0.25)
+        trackFill.setFill()
+        trackPath.fill()
+        let trackBorder = isDarkMode ? NSColor(calibratedWhite: 1.0, alpha: 0.18) : NSColor(calibratedWhite: 1.0, alpha: 0.55)
+        trackBorder.setStroke()
+        trackPath.lineWidth = 1.0
+        trackPath.stroke()
+
+        // Clip glow effects inside the rounded track
+        trackPath.addClip()
+
         if isProcessing {
             drawProcessingBeam(ctx: ctx, width: width, height: height)
         } else {
             drawSoundReactiveGlow(ctx: ctx, width: width, height: height, idlePresence: effectiveIdle)
         }
+
+        ctx.restoreGState()
     }
 
     // Sound-reactive mode: 7 lobes blooming from the bottom edge

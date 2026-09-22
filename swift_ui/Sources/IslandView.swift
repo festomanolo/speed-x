@@ -42,8 +42,7 @@ class IslandView: NSView, NSTextFieldDelegate {
 
     // Layout Dimensions
     let islandWidth: CGFloat = 72
-    let popoverWidth: CGFloat = 300
-    let popoverHeight: CGFloat = 175
+    let popoverWidth: CGFloat = 320
     let gap: CGFloat = 12
 
     var isDarkMode: Bool {
@@ -545,18 +544,26 @@ class IslandView: NSView, NSTextFieldDelegate {
                 return true
             }
 
-            let micW: CGFloat = 28
-            let micGap: CGFloat = 6
-            let inputW = popoverWidth - 40 - micW - micGap
-            inputField?.frame = NSRect(x: cardRect.minX + 20, y: cardRect.minY + 48, width: inputW, height: 28)
-            micButton?.frame = NSRect(x: cardRect.minX + 20 + inputW + micGap, y: cardRect.minY + 48, width: micW, height: 28)
-            voiceGlowView?.frame = NSRect(x: cardRect.minX + 16, y: cardRect.minY + 44, width: popoverWidth - 32, height: 34)
-            thinkingOrbView?.frame = NSRect(x: cardRect.minX + 20, y: cardRect.minY + 15, width: 22, height: 22)
-            waveView?.frame = NSRect(x: cardRect.minX + 20, y: cardRect.minY + 84, width: popoverWidth - 40, height: 28)
+            // 1. Thinking Orb Stage (BELOW THE TEXT OF SPEED-X ASSISTANT)
+            let orbSize: CGFloat = 52.0
+            thinkingOrbView?.frame = NSRect(x: cardRect.minX + (popoverWidth - orbSize) / 2, y: cardRect.minY + 44, width: orbSize, height: orbSize)
 
+            // 2. Text Input + Mic Button Row
+            let inputH: CGFloat = 30.0
+            let micW: CGFloat = 30.0
+            let micGap: CGFloat = 8.0
+            let inputW = popoverWidth - 40 - micW - micGap
+            inputField?.frame = NSRect(x: cardRect.minX + 20, y: cardRect.minY + 110, width: inputW, height: inputH)
+            micButton?.frame = NSRect(x: cardRect.minX + 20 + inputW + micGap, y: cardRect.minY + 110, width: micW, height: inputH)
+
+            // 3. Voice Animation Bar (BELOW TEXT INPUT)
+            voiceGlowView?.frame = NSRect(x: cardRect.minX + 20, y: cardRect.minY + 148, width: popoverWidth - 40, height: 26)
+            waveView?.frame = NSRect(x: cardRect.minX + 20, y: cardRect.minY + 148, width: popoverWidth - 40, height: 26)
+
+            // 4. Action Buttons (AFTER CONSIDERABLE 22px SPACING GAP)
             let btnWidth: CGFloat = (popoverWidth - 40 - 18) / 4
             for (i, btn) in actionButtons.enumerated() {
-                btn.frame = NSRect(x: cardRect.minX + 20 + CGFloat(i) * (btnWidth + 6), y: cardRect.minY + 84, width: btnWidth, height: 26)
+                btn.frame = NSRect(x: cardRect.minX + 20 + CGFloat(i) * (btnWidth + 6), y: cardRect.minY + 196, width: btnWidth, height: 26)
             }
         } else {
             popoverBlur.isHidden = true
@@ -584,9 +591,10 @@ class IslandView: NSView, NSTextFieldDelegate {
         if activeGauge == .system { targetArrowY = gauge2CenterY }
         else if activeGauge == .assistant { targetArrowY = gauge3CenterY }
 
+        let cardHeight: CGFloat = (activeGauge == .assistant) ? 275.0 : 180.0
         let popoverX = bounds.maxX - islandWidth - gap - popoverWidth
-        let popoverY = max(10, min(bounds.height - popoverHeight - 10, targetArrowY - popoverHeight / 2))
-        let cardRect = NSRect(x: popoverX, y: popoverY, width: popoverWidth, height: popoverHeight)
+        let popoverY = max(10, min(bounds.height - cardHeight - 10, targetArrowY - cardHeight / 2))
+        let cardRect = NSRect(x: popoverX, y: popoverY, width: popoverWidth, height: cardHeight)
 
         // Update glass backdrops below canvas
         updateGlassBackdrops(islandRect: islandRect, cardRect: cardRect, arrowY: targetArrowY)
@@ -825,28 +833,63 @@ class IslandView: NSView, NSTextFieldDelegate {
     }
 
     private func renderAssistantGlassCard(in rect: NSRect) {
-        let padX = rect.minX + 18
+        let padX = rect.minX + 20
         let curY = rect.minY + 16
         let dark = isDarkMode
-
-        let primaryText = dark ? NSColor.white : NSColor(calibratedWhite: 0.10, alpha: 1.0)
         let secText = dark ? NSColor(white: 0.65, alpha: 1.0) : NSColor(calibratedWhite: 0.38, alpha: 1.0)
 
-        // Title text is offset so thinkingOrbView sits at (padX, curY - 2, 22, 22)
-        drawText("Speed-X Assistant", at: CGPoint(x: padX + 28, y: curY + 2), font: .boldSystemFont(ofSize: 13), color: primaryText)
-        drawText("EN • SW", at: CGPoint(x: rect.maxX - 70, y: curY + 4), font: .systemFont(ofSize: 10, weight: .medium), color: secText)
+        // 1. Top Header Row: Sparkles Icon + Title + Status Badge
+        drawGlassHeader(iconName: "sparkles", title: "Speed-X Assistant", at: CGPoint(x: padX, y: curY))
 
+        // Badge pill on right
+        let badgeRect = NSRect(x: rect.maxX - 88, y: curY + 1, width: 68, height: 18)
+        let badgePath = NSBezierPath(roundedRect: badgeRect, xRadius: 9, yRadius: 9)
+        let badgeFill = dark ? NSColor(white: 1.0, alpha: 0.10) : NSColor(white: 1.0, alpha: 0.35)
+        badgeFill.setFill()
+        badgePath.fill()
+        let badgeStroke = dark ? NSColor(white: 1.0, alpha: 0.15) : NSColor(white: 1.0, alpha: 0.55)
+        badgeStroke.setStroke()
+        badgePath.lineWidth = 0.8
+        badgePath.stroke()
+        drawText("EN • SW", at: CGPoint(x: badgeRect.minX + 13, y: badgeRect.minY + 3), font: .boldSystemFont(ofSize: 9), color: secText)
+
+        // 2. Thinking Orb Dedicated Hero Stage Pedestal (BELOW THE TEXT OF SPEED-X ASSISTANT)
+        let orbCenterY: CGFloat = rect.minY + 70
+        let orbCenterX = rect.minX + (popoverWidth / 2)
+
+        // Concentric ambient halo pedestal behind orb
+        let haloRadius: CGFloat = 34.0
+        if let cgCtx = NSGraphicsContext.current?.cgContext {
+            cgCtx.saveGState()
+            let haloColors = [
+                (dark ? NSColor(red: 0, green: 229/255, blue: 255/255, alpha: 0.15) : NSColor(red: 0, green: 122/255, blue: 255/255, alpha: 0.12)).cgColor,
+                NSColor.clear.cgColor
+            ] as CFArray
+            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: haloColors, locations: [0.0, 1.0]) {
+                cgCtx.drawRadialGradient(gradient, startCenter: CGPoint(x: orbCenterX, y: orbCenterY), startRadius: 8, endCenter: CGPoint(x: orbCenterX, y: orbCenterY), endRadius: haloRadius, options: .drawsAfterEndLocation)
+            }
+            cgCtx.restoreGState()
+        }
+
+        // Concentric specular ring
+        let ringPath = NSBezierPath(ovalIn: NSRect(x: orbCenterX - 30, y: orbCenterY - 30, width: 60, height: 60))
+        let ringColor = dark ? NSColor(white: 1.0, alpha: 0.12) : NSColor(white: 1.0, alpha: 0.35)
+        ringColor.setStroke()
+        ringPath.lineWidth = 0.8
+        ringPath.stroke()
+
+        // 3. Status Line at the bottom of the card (y: rect.minY + 236)
         if voiceGlowView?.isProcessing == true {
             let workingColor = dark ? NSColor(calibratedRed: 0, green: 229/255, blue: 255/255, alpha: 1.0)
                                     : NSColor(calibratedRed: 0, green: 122/255, blue: 255/255, alpha: 1.0)
             if let img = NSImage(systemSymbolName: "sparkles", accessibilityDescription: nil) {
                 let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold).applying(.init(paletteColors: [workingColor]))
                 if let configured = img.withSymbolConfiguration(config) {
-                    let iconRect = NSRect(x: padX + 4, y: rect.minY + 120, width: 14, height: 14)
+                    let iconRect = NSRect(x: padX + 4, y: rect.minY + 236, width: 14, height: 14)
                     configured.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1.0)
                 }
             }
-            drawText("Speed-X Engine Working...", at: CGPoint(x: padX + 22, y: rect.minY + 120), font: .systemFont(ofSize: 10, weight: .medium), color: workingColor)
+            drawText("Speed-X Engine Working...", at: CGPoint(x: padX + 24, y: rect.minY + 236), font: .boldSystemFont(ofSize: 10), color: workingColor)
         } else if let last = SpeedXRunner.shared.lastResponse {
             let iconSymbol = last.success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
             let statusColor = last.success
@@ -856,11 +899,22 @@ class IslandView: NSView, NSTextFieldDelegate {
             if let img = NSImage(systemSymbolName: iconSymbol, accessibilityDescription: nil) {
                 let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold).applying(.init(paletteColors: [statusColor]))
                 if let configured = img.withSymbolConfiguration(config) {
-                    let iconRect = NSRect(x: padX + 4, y: rect.minY + 120, width: 14, height: 14)
+                    let iconRect = NSRect(x: padX + 4, y: rect.minY + 236, width: 14, height: 14)
                     configured.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1.0)
                 }
             }
-            drawText(last.message, at: CGPoint(x: padX + 22, y: rect.minY + 120), font: .systemFont(ofSize: 10), color: statusColor)
+            drawText(last.message, at: CGPoint(x: padX + 24, y: rect.minY + 236), font: .systemFont(ofSize: 10), color: statusColor)
+        } else {
+            // Idle ready
+            let readyColor = dark ? NSColor(calibratedRed: 74/255, green: 222/255, blue: 128/255, alpha: 1.0) : NSColor(calibratedRed: 22/255, green: 135/255, blue: 60/255, alpha: 1.0)
+            if let img = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) {
+                let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold).applying(.init(paletteColors: [readyColor]))
+                if let configured = img.withSymbolConfiguration(config) {
+                    let iconRect = NSRect(x: padX + 4, y: rect.minY + 236, width: 14, height: 14)
+                    configured.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+                }
+            }
+            drawText("Speed-X Engine Ready · 100% Offline", at: CGPoint(x: padX + 24, y: rect.minY + 236), font: .systemFont(ofSize: 10), color: secText)
         }
     }
 
