@@ -4,7 +4,7 @@ Copyright 2026 laya-coreml contributors
 This product includes software adapted from Laya (Apache-2.0):
 https://github.com/NandhaKishorM/laya
 Copyright Convai Innovations and Laya contributors.
-Upstream source revision: 6a5819129eb220570792e417e49723d697efd76f
+Upstream source revision: 573e5b62696ba441230cd6be71d593331b5d23af
 
 Prompt construction, tokenization, result formatting, validation fixtures,
 the ModernBERT architecture implementation, and the Snake game, policy, terminal

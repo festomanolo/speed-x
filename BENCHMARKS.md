@@ -65,7 +65,7 @@ Core ML model construction took 3.4–4.2 seconds in the GPU runs; the first sho
 | [laya](benchmarks/results/validation-laya.json) | 63/63 | 0.003307626 | 100 |
 | [multilingual](benchmarks/results/validation-multilingual.json) | 63/63 | 0.001577638 | 100 |
 | [typed-decisions](benchmarks/results/validation-typed-decisions.json) | 63/63 | 0.002726635 | 100 |
-| [multilingual-fp32](benchmarks/results/validation-multilingual-fp32.json) | 63/63 | 0.000000632 | 10 |
+| [multilingual-fp32](benchmarks/results/validation-multilingual-fp32.json) | 63/63 | 0.000000632 | 100 |
 
 All input token sequences matched upstream exactly. All repeated rounded public results were identical and finite. Action-probability error was zero on these fixtures, where the action distributions are strongly saturated; this is not a broad calibration evaluation. Process RSS is recorded, including framework caches; it is not interchangeable with MLX active-memory statistics.
 

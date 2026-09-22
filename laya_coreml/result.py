@@ -30,7 +30,7 @@ class ResultMixin:
                 qid, q = question_ids[start + row], internal[start + row]
                 k, qt = len(item["markers"]), item["qtype"]
                 scale = self.temperature_by_options.get(temp_bucket(qt, k), self.temperature[qt])
-                z = logits[row, :k] / max(1e-3, float(scale))
+                z = logits[row, :k] / scale
                 p = np.exp(z - z.max())
                 p /= p.sum()
                 answer = {

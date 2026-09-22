@@ -53,6 +53,10 @@ print(result["answers"]["refund"])
 
 支持 `choice`、有序 `score` 和布尔 `noul`；直接返回概率，不逐 token 生成文本。
 远程模型 ID 首次会下载；`local_files_only=True` 强制只使用已有缓存，也可以直接传本地目录。
+
+跟随上游 v0.3.5，校准温度在使用前会被钳制到 `[0.5, 5.0]`：检查点自带的 `choice:11+` 桶为 0.1006，
+会把 logits 锐化约 10 倍，将接近随机的答案报告成近乎确定。原始值仍可通过 `agent.temperature_raw`
+和 `agent.temperature_by_options_raw` 查看，加载时会对每个被钳制的桶发出 `RuntimeWarning`。
 ANE 快速版本的 **96-token 总预算包括问题、选项和状态**，超出会报错。
 需要更长输入时使用 `aac6fef/laya-multilingual-coreml` 的 1024-token 通用模型。
 [完整 API 和模型选择](docs/USAGE.md)。

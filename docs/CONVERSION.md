@@ -102,7 +102,7 @@ overwrite existing directories. A failed export removes only its newly created
 output directory.
 
 The committed golden reference was generated from unmodified upstream Laya
-revision `6a5819129eb220570792e417e49723d697efd76f` using FP32 PyTorch MPS.
+revision `573e5b62696ba441230cd6be71d593331b5d23af` using FP32 PyTorch MPS.
 It includes full input token IDs and unrounded logits. Validation compares those
 tokens exactly and checks selected answers, calibrated probabilities, action
 probabilities, token accounting, and repeated public results.

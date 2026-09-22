@@ -1,9 +1,9 @@
 {
   "environment": {
-    "created_at": "2026-09-19T23:32:51.712472+00:00",
+    "created_at": "2026-09-22T06:30:59.986135+00:00",
     "chip": "Apple M3 Max",
     "memory_bytes": 137438953472,
-    "os": "macOS-27.2-arm64-arm-64bit",
+    "os": "macOS-27.2-arm64-64bit",
     "python": "3.12.13",
     "packages": {
       "coremltools": "9.0",
@@ -13,7 +13,7 @@
       "mlx": "0.32.2",
       "laya-mlx": "0.1.0"
     },
-    "source_sha256": "29fc25bb3976f8a2bc69b27889d9d376657d117e5780a93654f21907a3b6178e"
+    "source_sha256": "589473f6cee028e3f281893e4ca679b98eff97ae7c1615ebdac6023ae62086db"
   },
   "model": "laya-multilingual",
   "export": {
@@ -85,9 +85,9 @@
       }
     }
   },
-  "reference_sha256": "27642bf5f16e1881514a65f91d2ba986fce786b832e60ed1a35fa44d1bfdd682",
+  "reference_sha256": "8f91c3be65e1fe77408e4809b1debecc44f2c3d84fea2a4f9cc88d150033d51e",
   "compute_units": "cpu_gpu",
-  "load_seconds": 4.675873541003966,
+  "load_seconds": 4.262090374999389,
   "cases": [
     {
       "name": "email",
@@ -257,14 +257,23 @@
   "probability_tolerance": 0.0001,
   "passed": true,
   "stability": {
-    "calls": 10,
-    "seconds": 3.9777194160051295,
+    "calls": 100,
+    "seconds": 38.9565552080021,
     "rounded_public_results_identical": true,
-    "rss_before": 2919104512,
-    "rss_after": 2072952832,
+    "rss_before": 2921365504,
+    "rss_after": 2092318720,
     "rss_samples": [
-      2919104512,
-      2072952832
+      2921365504,
+      2921512960,
+      2089697280,
+      2091859968,
+      2091810816,
+      2091909120,
+      2092023808,
+      2092269568,
+      2092187648,
+      2092285952,
+      2092318720
     ],
     "memory_note": "Process RSS includes Core ML/framework caches; not an active-tensor allocator measurement"
   }

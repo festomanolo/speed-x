@@ -1,11 +1,11 @@
 """Core ML inference. No MLX, Transformers, or PyTorch dependency at runtime."""
 
 import json
-import math
 
 import numpy as np
 
 from .artifacts import package_for_coreml
+from .common import read_temperatures
 from .hub import DEFAULT_MODEL, resolve_checkpoint
 from .prompt import PromptMixin
 from .result import ResultMixin
@@ -45,13 +45,12 @@ class Agent(PromptMixin, ResultMixin):
                 "allow_unvalidated_gpu=True is for reproducing the failure only."
             )
         self.cfg = json.loads((self.model_dir / "rl_agent_config.json").read_text())
-        self.temperature = self.cfg.get("temperature", [1.0, 1.0, 1.0])
-        self.temperature_by_options = self.cfg.get("temperature_by_options", {})
-        if len(self.temperature) != 3 or any(
-            not math.isfinite(float(t)) or float(t) <= 0
-            for t in [*self.temperature, *self.temperature_by_options.values()]
-        ):
-            raise ValueError("Calibration temperatures must be finite and positive")
+        (
+            self.temperature,
+            self.temperature_by_options,
+            self.temperature_raw,
+            self.temperature_by_options_raw,
+        ) = read_temperatures(self.cfg)
         self.tok = Tokenizer(self.model_dir / "tokenizer")
         self.batch_size = self.shape["batch_size"]
         self.pad_to_multiple = 16

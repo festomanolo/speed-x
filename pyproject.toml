@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "laya-coreml"
-version = "0.1.0"
+version = "0.1.1"
 description = "Local Laya typed decisions on Apple Core ML and Neural Engine, with a live Snake demo"
 keywords = ["coreml", "neural-engine", "laya", "decision-model", "apple-silicon", "local-ai"]
 classifiers = [
@@ -23,7 +23,7 @@ dependencies = ["coremltools>=9,<10", "numpy>=1.26,<2.2", "tokenizers>=0.21,<1",
 [project.optional-dependencies]
 convert = ["torch==2.7.0", "safetensors>=0.6"]
 dev = ["pytest>=8", "ruff>=0.12", "build>=1", "psutil>=6"]
-compare = ["laya-mlx==0.1.0"]
+compare = ["laya-mlx==0.2.0"]
 research = ["kmeans1d==0.4.0"]
 demo = ["rich>=15,<16", "Pillow>=12,<13"]
 publish = ["twine>=6,<7"]

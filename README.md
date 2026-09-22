@@ -66,6 +66,13 @@ questions. There is no autoregressive decoding or generated JSON to parse. Hub
 models download before initialization; subsequent predictions stay local. Pass
 `local_files_only=True` to require an existing cache, or load a local directory.
 
+Following upstream v0.3.5, fitted calibration temperatures are clamped to
+`[0.5, 5.0]` before use: the shipped `choice:11+` bucket is 0.1006, which would
+sharpen logits ~10x and report a coin flip as near-certainty. The checkpoint's
+raw values remain available as `agent.temperature_raw` and
+`agent.temperature_by_options_raw`, and a `RuntimeWarning` names every clamped
+bucket at load.
+
 The ANE bundle has a **96-token total limit**, including question, options and
 state. Longer requests raise a capacity error. Use
 `aac6fef/laya-multilingual-coreml` for the general-purpose 1024-token model.

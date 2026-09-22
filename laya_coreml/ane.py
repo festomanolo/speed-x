@@ -13,6 +13,7 @@ from laya_coreml.result import ResultMixin
 from laya_coreml.tokenizer import Tokenizer
 
 from .artifacts import package_for_coreml, verify_files, verify_research_manifest
+from .common import read_temperatures
 
 
 class ANEAgent(PromptMixin, ResultMixin):
@@ -40,8 +41,12 @@ class ANEAgent(PromptMixin, ResultMixin):
             host_weights = self.source / "model.safetensors"
         self.model_dir = self.source
         self.cfg = json.loads((self.source / "rl_agent_config.json").read_text())
-        self.temperature = self.cfg.get("temperature", [1.0, 1.0, 1.0])
-        self.temperature_by_options = self.cfg.get("temperature_by_options", {})
+        (
+            self.temperature,
+            self.temperature_by_options,
+            self.temperature_raw,
+            self.temperature_by_options_raw,
+        ) = read_temperatures(self.cfg)
         self.tok = Tokenizer(self.source / "tokenizer")
         self.batch_size, self.pad_to_multiple = 1, 16
         self.shape = {
