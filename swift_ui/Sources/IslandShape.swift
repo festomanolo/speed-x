@@ -43,42 +43,33 @@ class IslandShape {
         let minY = bodyRect.minY
         let maxY = bodyRect.maxY
 
-        // Start top-left
-        path.move(to: NSPoint(x: minX + cornerRadius, y: minY))
-
-        // Top edge & top-right corner
-        path.line(to: NSPoint(x: maxX - cornerRadius, y: minY))
-        path.curve(to: NSPoint(x: maxX, y: minY + cornerRadius),
-                   controlPoint1: NSPoint(x: maxX, y: minY),
-                   controlPoint2: NSPoint(x: maxX, y: minY + cornerRadius))
-
-        // Right edge down to arrow
         let clampedArrowY = max(minY + cornerRadius + arrowHeight, min(maxY - cornerRadius - arrowHeight, arrowY))
         let arrowTopY = clampedArrowY - arrowHeight / 2
         let arrowBottomY = clampedArrowY + arrowHeight / 2
 
+        // Start top edge
+        path.move(to: NSPoint(x: minX + cornerRadius, y: minY))
+
+        // Top-right corner
+        path.line(to: NSPoint(x: maxX - cornerRadius, y: minY))
+        path.appendArc(from: NSPoint(x: maxX, y: minY), to: NSPoint(x: maxX, y: minY + cornerRadius), radius: cornerRadius)
+
+        // Right edge down to arrow beak
         path.line(to: NSPoint(x: maxX, y: arrowTopY))
-        // Pointing arrow beak pointing directly to the gauge
         path.line(to: NSPoint(x: maxX + arrowWidth, y: clampedArrowY))
         path.line(to: NSPoint(x: maxX, y: arrowBottomY))
 
         // Right edge down to bottom-right corner
         path.line(to: NSPoint(x: maxX, y: maxY - cornerRadius))
-        path.curve(to: NSPoint(x: maxX - cornerRadius, y: maxY),
-                   controlPoint1: NSPoint(x: maxX, y: maxY),
-                   controlPoint2: NSPoint(x: maxX, y: maxY - cornerRadius))
+        path.appendArc(from: NSPoint(x: maxX, y: maxY), to: NSPoint(x: maxX - cornerRadius, y: maxY), radius: cornerRadius)
 
         // Bottom edge & bottom-left corner
         path.line(to: NSPoint(x: minX + cornerRadius, y: maxY))
-        path.curve(to: NSPoint(x: minX, y: maxY - cornerRadius),
-                   controlPoint1: NSPoint(x: minX, y: maxY),
-                   controlPoint2: NSPoint(x: minX, y: maxY - cornerRadius))
+        path.appendArc(from: NSPoint(x: minX, y: maxY), to: NSPoint(x: minX, y: maxY - cornerRadius), radius: cornerRadius)
 
         // Left edge & top-left corner
         path.line(to: NSPoint(x: minX, y: minY + cornerRadius))
-        path.curve(to: NSPoint(x: minX + cornerRadius, y: minY),
-                   controlPoint1: NSPoint(x: minX, y: minY),
-                   controlPoint2: NSPoint(x: minX + cornerRadius, y: minY))
+        path.appendArc(from: NSPoint(x: minX, y: minY), to: NSPoint(x: minX + cornerRadius, y: minY), radius: cornerRadius)
 
         path.close()
         return path
