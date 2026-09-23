@@ -35,7 +35,10 @@ class IslandShape {
         return path
     }
 
-    static func createPopoverPath(in rect: NSRect, arrowY: CGFloat, arrowWidth: CGFloat = 12, arrowHeight: CGFloat = 14, cornerRadius: CGFloat = 18) -> NSBezierPath {
+    static func createPopoverPath(in rect: NSRect, arrowY: CGFloat, arrowWidth: CGFloat = 12, arrowHeight: CGFloat = 14, cornerRadius: CGFloat = 18, hasArrow: Bool = true) -> NSBezierPath {
+        if !hasArrow {
+            return NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
+        }
         let path = NSBezierPath()
         let bodyRect = NSRect(x: rect.minX, y: rect.minY, width: rect.width - arrowWidth, height: rect.height)
         let minX = bodyRect.minX
