@@ -12,12 +12,9 @@ public class VoiceGlowBeamView: NSView {
         didSet { needsDisplay = true }
     }
 
-    public var sensitivity: Double = 3.2
-    public var threshold: Double = 0.012
-    public var idle: Double = 0.22
-    public var reach: Double = 1.35
-    public var spread: Double = 1.10
-    public var processingDuration: Double = 1.15
+    public var sensitivity: Double = 3.4
+    public var threshold: Double = 0.010
+    public var cornerRadius: CGFloat = 18.0
 
     private var targetLevel: Double = 0.0
     private var currentLevel: Double = 0.0
@@ -25,23 +22,7 @@ public class VoiceGlowBeamView: NSView {
     private var lastTimestamp: Double = CACurrentMediaTime()
     private var animationTimer: Timer?
 
-    // 7 lobes as defined in voice-glow (Libraries.dev)
-    private struct LobeConfig {
-        let xOffsetRatio: Double // fraction of width/2
-        let width: Double
-        let height: Double
-        let color: NSColor
-    }
-
-    private let lobes: [LobeConfig] = [
-        LobeConfig(xOffsetRatio: -0.75, width: 44, height: 26, color: NSColor(red: 255/255, green: 70/255, blue: 120/255, alpha: 1.0)),  // Rose #FF4678
-        LobeConfig(xOffsetRatio: -0.50, width: 50, height: 32, color: NSColor(red: 60/255, green: 190/255, blue: 255/255, alpha: 1.0)),  // Cyan #3CBEFF
-        LobeConfig(xOffsetRatio: -0.25, width: 56, height: 40, color: NSColor(red: 175/255, green: 70/255, blue: 255/255, alpha: 1.0)), // Violet #AF46FF
-        LobeConfig(xOffsetRatio: 0.0,   width: 78, height: 48, color: NSColor(red: 60/255, green: 222/255, blue: 130/255, alpha: 1.0)), // Emerald #3CDE82
-        LobeConfig(xOffsetRatio: 0.25,  width: 56, height: 40, color: NSColor(red: 255/255, green: 150/255, blue: 40/255, alpha: 1.0)),  // Amber #FF9628
-        LobeConfig(xOffsetRatio: 0.50,  width: 50, height: 32, color: NSColor(red: 90/255, green: 100/255, blue: 255/255, alpha: 1.0)),  // Indigo #5A64FF
-        LobeConfig(xOffsetRatio: 0.75,  width: 44, height: 26, color: NSColor(red: 40/255, green: 200/255, blue: 190/255, alpha: 1.0))   // Aqua #28C8BE
-    ]
+    public override var isFlipped: Bool { true }
 
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -78,13 +59,13 @@ public class VoiceGlowBeamView: NSView {
             self.lastTimestamp = now
             self.clockTime += dt
 
-            // Envelope follower (fast attack for voice transients, smooth natural release)
+            // Responsive envelope follower for natural blooming and dimming
             if self.targetLevel > self.currentLevel {
-                let attackSpeed = dt / 0.16
-                self.currentLevel += (self.targetLevel - self.currentLevel) * min(1.0, attackSpeed * 2.8)
+                let attackSpeed = dt * 14.0 // rapid attack on speech transients
+                self.currentLevel += (self.targetLevel - self.currentLevel) * min(1.0, attackSpeed)
             } else {
-                let releaseSpeed = dt / 0.55
-                self.currentLevel += (self.targetLevel - self.currentLevel) * min(1.0, releaseSpeed * 1.8)
+                let releaseSpeed = dt * 2.6 // smooth, natural dimming decay
+                self.currentLevel += (self.targetLevel - self.currentLevel) * min(1.0, releaseSpeed)
             }
 
             self.needsDisplay = true
@@ -109,226 +90,202 @@ public class VoiceGlowBeamView: NSView {
         }
     }
 
-    // MARK: - Drawing
+    // MARK: - Drawing: Volumetric Bottom-Edge Aurora VoiceBeam
     public override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
 
         let width = bounds.width
         let height = bounds.height
-        guard width > 20 && height > 4 else { return }
-
-        // Breathing idle presence: 5.2s sine wave
-        let breathe = (sin(clockTime * (2.0 * .pi / 5.2)) + 1.0) / 2.0
-        let effectiveIdle = idle * (0.8 + 0.2 * breathe)
+        guard width > 30 && height > 10 else { return }
 
         ctx.saveGState()
 
-        // 1. Sleek Liquid Glass Capsule Track
-        let trackRect = bounds.insetBy(dx: 1, dy: 1)
-        let cornerR = min(trackRect.height / 2.0, 11.0)
-        let trackPath = NSBezierPath(roundedRect: trackRect, xRadius: cornerR, yRadius: cornerR)
-
-        let trackFill = isDarkMode ? NSColor(calibratedWhite: 1.0, alpha: 0.08) : NSColor(calibratedWhite: 1.0, alpha: 0.25)
-        trackFill.setFill()
-        trackPath.fill()
-
-        let trackBorder = isDarkMode ? NSColor(calibratedWhite: 1.0, alpha: 0.20) : NSColor(calibratedWhite: 1.0, alpha: 0.60)
-        trackBorder.setStroke()
-        trackPath.lineWidth = 1.0
-        trackPath.stroke()
-
-        // Clip all visual reactions within track capsule
-        trackPath.addClip()
+        // 1. Clip strictly to the card's bottom rounded boundary
+        let clipPath = NSBezierPath()
+        clipPath.move(to: NSPoint(x: 0, y: 0))
+        clipPath.line(to: NSPoint(x: width, y: 0))
+        clipPath.line(to: NSPoint(x: width, y: height - cornerRadius))
+        clipPath.appendArc(from: NSPoint(x: width, y: height), to: NSPoint(x: width - cornerRadius, y: height), radius: cornerRadius)
+        clipPath.line(to: NSPoint(x: cornerRadius, y: height))
+        clipPath.appendArc(from: NSPoint(x: 0, y: height), to: NSPoint(x: 0, y: height - cornerRadius), radius: cornerRadius)
+        clipPath.close()
+        clipPath.addClip()
 
         if isProcessing {
-            drawProcessingBeam(ctx: ctx, width: width, height: height)
+            drawProcessingStage(ctx: ctx, width: width, height: height)
         } else {
-            drawSoundReactiveBeam(ctx: ctx, width: width, height: height, idlePresence: effectiveIdle)
+            drawSoundReactiveAuroraStage(ctx: ctx, width: width, height: height)
         }
 
         ctx.restoreGState()
     }
 
-    // MARK: - Sound Reactive VoiceBeam with Alternating Intensity Waves
-    private func drawSoundReactiveBeam(ctx: CGContext, width: Double, height: Double, idlePresence: Double) {
+    // MARK: - Sound Reactive Aurora: Blooming and Dimming with live vocal intensity
+    private func drawSoundReactiveAuroraStage(ctx: CGContext, width: Double, height: Double) {
+        // Natural organic breathing cycle when idle
+        let breathe = (sin(clockTime * 1.6) + 1.0) / 2.0
+        let idlePresence = 0.12 + 0.05 * breathe
         let activeLevel = max(idlePresence, currentLevel)
-        let midX = width / 2.0
-        let baselineY = 2.0 // bottom of view in unflipped AppKit coords
+
+        let bottomY = height + 2.0 // Anchor light source right at the bottom edge
 
         ctx.saveGState()
 
-        // 1. Ambient Bloom Halos (7 Chromatic Lobes)
-        let flowShift = sin(clockTime * 0.9) * 10.0
-        for lobe in lobes {
-            let lobeX = midX + (lobe.xOffsetRatio * (width * 0.44) * spread) + flowShift
-            let lobeH = lobe.height * (0.9 + reach * activeLevel)
-            let lobeW = lobe.width * (0.95 + 0.35 * activeLevel)
-            let alpha = (0.28 + 0.62 * activeLevel) * (isDarkMode ? 0.85 : 0.65)
+        // --- LAYER 1: Deep Volumetric Colored Light Clouds ---
 
-            let lobeRect = CGRect(x: lobeX - lobeW / 2.0, y: baselineY - 4.0, width: lobeW, height: min(height * 1.5, lobeH))
-            drawRadialLobe(ctx: ctx, rect: lobeRect, color: lobe.color.withAlphaComponent(CGFloat(alpha)))
-        }
+        // Far-Left Warm Amber/Olive Haze (Soft & muted, matching reference)
+        let amberAlpha = (0.10 + 0.26 * activeLevel) * (isDarkMode ? 1.0 : 0.75)
+        let amberColor = NSColor(red: 180/255, green: 130/255, blue: 40/255, alpha: CGFloat(amberAlpha))
+        drawEllipticalGlow(ctx: ctx, center: CGPoint(x: width * 0.16, y: bottomY), radiusX: width * 0.24, radiusY: height * (0.35 + 0.28 * activeLevel), color: amberColor)
 
-        // 2. Alternating Audio-Reactive Waves ("Spectro Waves")
-        // Three alternating harmonic wave ribbons that undulate dynamically based on voice intensity
-        let waveY = baselineY + 4.0
-        let baseAmp = 2.0 + (height * 0.36) * activeLevel
+        // Mid-Left Electric Teal / Sage Wash
+        let tealAlpha = (0.16 + 0.35 * activeLevel) * (isDarkMode ? 1.0 : 0.8)
+        let tealColor = NSColor(red: 20/255, green: 140/255, blue: 120/255, alpha: CGFloat(tealAlpha))
+        drawEllipticalGlow(ctx: ctx, center: CGPoint(x: width * 0.34, y: bottomY), radiusX: width * 0.26, radiusY: height * (0.45 + 0.35 * activeLevel), color: tealColor)
 
-        // Wave 1: Cyan/Emerald forward wave
-        let wavePath1 = CGMutablePath()
-        let wavePath2 = CGMutablePath()
-        let wavePath3 = CGMutablePath()
+        // Mid-Right Deep Violet / Plum Cloud (Under mic & close buttons)
+        let violetAlpha = (0.20 + 0.40 * activeLevel) * (isDarkMode ? 1.0 : 0.8)
+        let violetColor = NSColor(red: 110/255, green: 45/255, blue: 130/255, alpha: CGFloat(violetAlpha))
+        drawEllipticalGlow(ctx: ctx, center: CGPoint(x: width * 0.68, y: bottomY), radiusX: width * 0.28, radiusY: height * (0.50 + 0.38 * activeLevel), color: violetColor)
 
-        let phase1 = clockTime * (4.2 + activeLevel * 6.5)
-        let phase2 = -clockTime * (5.0 + activeLevel * 7.5) + 1.4 // Alternates in reverse direction!
-        let phase3 = clockTime * (6.8 + activeLevel * 9.0) + 2.8 // Higher frequency harmonic
+        // Far-Right Rich Berry / Magenta Cloud
+        let magentaAlpha = (0.18 + 0.42 * activeLevel) * (isDarkMode ? 1.0 : 0.8)
+        let magentaColor = NSColor(red: 155/255, green: 45/255, blue: 100/255, alpha: CGFloat(magentaAlpha))
+        drawEllipticalGlow(ctx: ctx, center: CGPoint(x: width * 0.84, y: bottomY), radiusX: width * 0.26, radiusY: height * (0.44 + 0.34 * activeLevel), color: magentaColor)
 
-        var started = false
-        for x in stride(from: 0.0, through: width, by: 2.0) {
-            // Hanning / Bell envelope: zero at left/right edges, 1.0 at center
-            let normX = x / width
-            let env = sin(normX * .pi)
+        // Center Hero Emerald Green Aurora Pillar (Tallest volumetric bloom rising between buttons)
+        let emeraldAlpha = (0.35 + 0.58 * activeLevel) * (isDarkMode ? 1.0 : 0.85)
+        let emeraldColor = NSColor(red: 24/255, green: 185/255, blue: 105/255, alpha: CGFloat(emeraldAlpha))
+        let emeraldHeight = height * (0.60 + 0.38 * activeLevel)
+        drawEllipticalGlow(ctx: ctx, center: CGPoint(x: width * 0.50, y: bottomY), radiusX: width * 0.25, radiusY: emeraldHeight, color: emeraldColor)
 
-            // Wave 1 (Primary harmonic)
-            let y1 = waveY + sin(x * 0.055 + phase1) * baseAmp * env
-            // Wave 2 (Alternating secondary harmonic)
-            let y2 = waveY + sin(x * 0.075 + phase2) * (baseAmp * 0.80) * env
-            // Wave 3 (Fast shimmer harmonic)
-            let y3 = waveY + cos(x * 0.095 + phase3) * (baseAmp * 0.60) * env
+        // Inner Saturated Mint / Cyan Radiance
+        let innerMintAlpha = (0.42 + 0.52 * activeLevel)
+        let innerMintColor = NSColor(red: 35/255, green: 215/255, blue: 170/255, alpha: CGFloat(innerMintAlpha))
+        drawEllipticalGlow(ctx: ctx, center: CGPoint(x: width * 0.50, y: bottomY), radiusX: width * 0.20, radiusY: height * (0.40 + 0.30 * activeLevel), color: innerMintColor)
 
-            let pt1 = CGPoint(x: x, y: y1)
-            let pt2 = CGPoint(x: x, y: y2)
-            let pt3 = CGPoint(x: x, y: y3)
+        // --- LAYER 2: Radiant Center-Bottom Bloom & Hot White Core ---
+        // Saturated cyan/mint floor flare at bottom center
+        let flareAlpha = (0.45 + 0.55 * activeLevel)
+        let flareColor = NSColor(red: 45/255, green: 230/255, blue: 185/255, alpha: CGFloat(flareAlpha))
+        drawEllipticalGlow(ctx: ctx, center: CGPoint(x: width * 0.50, y: height + 1.0), radiusX: width * 0.30, radiusY: 26.0 * (1.0 + 0.35 * activeLevel), color: flareColor)
 
-            if !started {
-                wavePath1.move(to: pt1)
-                wavePath2.move(to: pt2)
-                wavePath3.move(to: pt3)
-                started = true
-            } else {
-                wavePath1.addLine(to: pt1)
-                wavePath2.addLine(to: pt2)
-                wavePath3.addLine(to: pt3)
-            }
-        }
+        // Hot white core glint at bottom center
+        let specularAlpha = (0.50 + 0.50 * activeLevel)
+        let specularColor = NSColor.white.withAlphaComponent(CGFloat(specularAlpha))
+        drawEllipticalGlow(ctx: ctx, center: CGPoint(x: width * 0.50, y: height), radiusX: width * 0.16, radiusY: 9.0 * (1.0 + 0.25 * activeLevel), color: specularColor)
 
-        // Render Wave 2 (Rose/Violet reverse alternating wave)
+        // --- LAYER 3: Chromatic Refraction Rim Along the Bottom Fillet Curve ---
+        let rimPath = CGMutablePath()
+        rimPath.move(to: CGPoint(x: 1.0, y: height - cornerRadius))
+        rimPath.addArc(tangent1End: CGPoint(x: 1.0, y: height - 1.0), tangent2End: CGPoint(x: cornerRadius, y: height - 1.0), radius: cornerRadius - 1.0)
+        rimPath.addLine(to: CGPoint(x: width - cornerRadius, y: height - 1.0))
+        rimPath.addArc(tangent1End: CGPoint(x: width - 1.0, y: height - 1.0), tangent2End: CGPoint(x: width - 1.0, y: height - cornerRadius), radius: cornerRadius - 1.0)
+
+        // Stroke rim with multi-stop chromatic gradient
         ctx.saveGState()
         ctx.setLineWidth(1.6)
-        let color2 = NSColor(red: 255/255, green: 70/255, blue: 180/255, alpha: CGFloat(0.40 + 0.55 * activeLevel))
-        ctx.setStrokeColor(color2.cgColor)
-        ctx.addPath(wavePath2)
-        ctx.strokePath()
+        ctx.setLineCap(.round)
+        ctx.addPath(rimPath)
+        ctx.replacePathWithStrokedPath()
+        ctx.clip()
+
+        let rimGradientColors = [
+            NSColor(red: 140/255, green: 110/255, blue: 50/255, alpha: CGFloat(0.20 + 0.25 * activeLevel)).cgColor,
+            NSColor(red: 30/255, green: 170/255, blue: 150/255, alpha: CGFloat(0.40 + 0.35 * activeLevel)).cgColor,
+            NSColor(red: 80/255, green: 235/255, blue: 195/255, alpha: CGFloat(0.70 + 0.30 * activeLevel)).cgColor,
+            NSColor(white: 1.0, alpha: CGFloat(0.85 + 0.15 * activeLevel)).cgColor,
+            NSColor(red: 80/255, green: 235/255, blue: 195/255, alpha: CGFloat(0.70 + 0.30 * activeLevel)).cgColor,
+            NSColor(red: 70/255, green: 130/255, blue: 215/255, alpha: CGFloat(0.45 + 0.35 * activeLevel)).cgColor,
+            NSColor(red: 175/255, green: 75/255, blue: 130/255, alpha: CGFloat(0.35 + 0.35 * activeLevel)).cgColor
+        ] as CFArray
+        let rimLocations: [CGFloat] = [0.0, 0.22, 0.44, 0.50, 0.56, 0.76, 1.0]
+
+        if let rimGrad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: rimGradientColors, locations: rimLocations) {
+            ctx.drawLinearGradient(rimGrad, start: CGPoint(x: 0, y: height), end: CGPoint(x: width, y: height), options: [])
+        }
         ctx.restoreGState()
-
-        // Render Wave 3 (Amber/Gold high shimmer wave)
-        ctx.saveGState()
-        ctx.setLineWidth(1.4)
-        let color3 = NSColor(red: 255/255, green: 170/255, blue: 50/255, alpha: CGFloat(0.35 + 0.55 * activeLevel))
-        ctx.setStrokeColor(color3.cgColor)
-        ctx.addPath(wavePath3)
-        ctx.strokePath()
-        ctx.restoreGState()
-
-        // Render Wave 1 (Electric Cyan/Emerald primary forward wave)
-        ctx.saveGState()
-        ctx.setLineWidth(2.0)
-        let color1 = NSColor(red: 60/255, green: 220/255, blue: 230/255, alpha: CGFloat(0.55 + 0.45 * activeLevel))
-        ctx.setStrokeColor(color1.cgColor)
-        ctx.addPath(wavePath1)
-        ctx.strokePath()
-        ctx.restoreGState()
-
-        // 3. Crisp Baseline Core Beam
-        let strokeAlpha = min(1.0, 0.45 + 0.55 * activeLevel)
-        let beamY = baselineY + 1.0
-        let baselinePath = CGMutablePath()
-        baselinePath.move(to: CGPoint(x: width * 0.08, y: beamY))
-        baselinePath.addLine(to: CGPoint(x: width * 0.92, y: beamY))
-
-        ctx.saveGState()
-        ctx.setLineWidth(1.8)
-        ctx.setStrokeColor(NSColor.white.withAlphaComponent(CGFloat(strokeAlpha)).cgColor)
-        ctx.addPath(baselinePath)
-        ctx.strokePath()
-        ctx.restoreGState()
-
-        // 4. White-Hot Epicenter Core
-        let coreW = 70.0 * (1.0 + 0.5 * activeLevel)
-        let coreH = 14.0 * (1.0 + reach * activeLevel)
-        let coreRect = CGRect(x: midX - coreW / 2.0, y: baselineY - 2.0, width: coreW, height: coreH)
-        let coreColor = isDarkMode ? NSColor.white.withAlphaComponent(CGFloat(0.40 + 0.55 * activeLevel))
-                                   : NSColor.white.withAlphaComponent(CGFloat(0.60 + 0.40 * activeLevel))
-        drawRadialLobe(ctx: ctx, rect: coreRect, color: coreColor)
 
         ctx.restoreGState()
     }
 
-    // MARK: - Processing Mode: Traveling sweep beam with eased turnaround
-    private func drawProcessingBeam(ctx: CGContext, width: Double, height: Double) {
-        let midX = width / 2.0
-        let sweepPeriod = processingDuration * 2.0
+    // MARK: - Processing Stage: Traveling Sweep Beam
+    private func drawProcessingStage(ctx: CGContext, width: Double, height: Double) {
+        let sweepPeriod = 2.2
         let sweepPhase = fmod(clockTime, sweepPeriod) / sweepPeriod
         let rawSweep = sin(sweepPhase * 2.0 * .pi)
-        let sweepEased = rawSweep * abs(rawSweep) // Smooth curved turnaround
-        let travelRange = width * 0.38
-        let beamX = midX + sweepEased * travelRange
-        let baselineY = 2.0
+        let sweepEased = rawSweep * abs(rawSweep) // Smooth turnaround
+        let travelRange = width * 0.35
+        let beamX = (width / 2.0) + sweepEased * travelRange
+        let bottomY = height + 4.0
 
         ctx.saveGState()
 
-        // Lit base glow across track
-        let baseRect = CGRect(x: width * 0.12, y: baselineY, width: width * 0.76, height: height * 0.8)
-        drawRadialLobe(ctx: ctx, rect: baseRect, color: NSColor(red: 175/255, green: 70/255, blue: 255/255, alpha: 0.22))
+        // Background ambient glow across the card floor
+        let ambientColor = NSColor(red: 139/255, green: 92/255, blue: 246/255, alpha: 0.25)
+        drawEllipticalGlow(ctx: ctx, center: CGPoint(x: width * 0.50, y: bottomY), radiusX: width * 0.45, radiusY: height * 0.70, color: ambientColor)
 
         // Traveling iridescent beam lobes
-        let beamColors: [NSColor] = [
-            NSColor(red: 255/255, green: 70/255, blue: 120/255, alpha: 0.85), // Rose
-            NSColor(red: 60/255, green: 190/255, blue: 255/255, alpha: 0.90),  // Cyan
-            NSColor(red: 175/255, green: 70/255, blue: 255/255, alpha: 0.90), // Purple
-            NSColor(red: 60/255, green: 222/255, blue: 130/255, alpha: 0.85)  // Green
+        let lobes: [(Double, NSColor)] = [
+            (-20.0, NSColor(red: 236/255, green: 72/255, blue: 153/255, alpha: 0.85)), // Rose
+            (-8.0,  NSColor(red: 6/255, green: 182/255, blue: 212/255, alpha: 0.90)),   // Cyan
+            (0.0,   NSColor(red: 34/255, green: 197/255, blue: 94/255, alpha: 0.95)),   // Emerald
+            (10.0,  NSColor(red: 139/255, green: 92/255, blue: 246/255, alpha: 0.90))   // Violet
         ]
 
-        for (idx, color) in beamColors.enumerated() {
-            let offset = (Double(idx) - 1.5) * 14.0
-            let lobeRect = CGRect(x: beamX + offset - 22, y: baselineY - 4.0, width: 44, height: height * 0.95)
-            drawRadialLobe(ctx: ctx, rect: lobeRect, color: color)
+        for (offset, color) in lobes {
+            drawEllipticalGlow(ctx: ctx, center: CGPoint(x: beamX + offset, y: bottomY), radiusX: 38.0, radiusY: height * 0.85, color: color)
         }
 
         // White-hot traveling core center
-        let coreRect = CGRect(x: beamX - 22, y: baselineY - 2.0, width: 44, height: height * 0.6)
-        drawRadialLobe(ctx: ctx, rect: coreRect, color: NSColor.white.withAlphaComponent(0.95))
+        drawEllipticalGlow(ctx: ctx, center: CGPoint(x: beamX, y: bottomY - 1.0), radiusX: 22.0, radiusY: height * 0.45, color: NSColor.white.withAlphaComponent(0.95))
 
-        // Glowing bottom track line around traveling beam
-        ctx.setLineWidth(2.2)
-        ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.90).cgColor)
+        // Sweeping bottom light track
+        let rimY = height - 1.2
+        ctx.saveGState()
+        ctx.setLineWidth(2.5)
+        ctx.setLineCap(.round)
+        ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.92).cgColor)
         ctx.beginPath()
-        ctx.move(to: CGPoint(x: max(10, beamX - 34), y: baselineY + 1.0))
-        ctx.addLine(to: CGPoint(x: min(width - 10, beamX + 34), y: baselineY + 1.0))
+        ctx.move(to: CGPoint(x: max(cornerRadius, beamX - 32), y: rimY))
+        ctx.addLine(to: CGPoint(x: min(width - cornerRadius, beamX + 32), y: rimY))
         ctx.strokePath()
+        ctx.restoreGState()
 
         ctx.restoreGState()
     }
 
-    private func drawRadialLobe(ctx: CGContext, rect: CGRect, color: NSColor) {
+    // Helper to render high-order Gaussian-style elliptical glows
+    private func drawEllipticalGlow(ctx: CGContext, center: CGPoint, radiusX: CGFloat, radiusY: CGFloat, color: NSColor) {
+        guard radiusX > 1 && radiusY > 1 else { return }
+
         ctx.saveGState()
-        let colors = [color.cgColor, color.withAlphaComponent(0.0).cgColor] as CFArray
-        let locations: [CGFloat] = [0.0, 1.0]
+        let colors = [
+            color.cgColor,
+            color.withAlphaComponent(color.alphaComponent * 0.65).cgColor,
+            color.withAlphaComponent(color.alphaComponent * 0.20).cgColor,
+            color.withAlphaComponent(0.0).cgColor
+        ] as CFArray
+        let locations: [CGFloat] = [0.0, 0.35, 0.70, 1.0]
+
         guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: locations) else {
             ctx.restoreGState()
             return
         }
 
-        let center = CGPoint(x: rect.midX, y: rect.minY + 2.0)
-        let radius = max(rect.width, rect.height) / 2.0
-
-        ctx.saveGState()
-        let scaleY = rect.height / rect.width
+        let scaleY = radiusY / radiusX
         ctx.translateBy(x: center.x, y: center.y)
         ctx.scaleBy(x: 1.0, y: scaleY)
-        ctx.drawRadialGradient(gradient, startCenter: .zero, startRadius: 0.0, endCenter: .zero, endRadius: radius, options: .drawsAfterEndLocation)
-        ctx.restoreGState()
+
+        ctx.drawRadialGradient(
+            gradient,
+            startCenter: .zero,
+            startRadius: 0.0,
+            endCenter: .zero,
+            endRadius: radiusX,
+            options: .drawsAfterEndLocation
+        )
 
         ctx.restoreGState()
     }
