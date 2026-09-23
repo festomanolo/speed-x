@@ -1,162 +1,95 @@
-![Laya Core ML playing Snake with real local model probabilities](https://raw.githubusercontent.com/mizorewww/laya-coreml/main/docs/assets/snake-demo.gif)
+# Speed-X
 
-# Laya-CoreML
+**Private AI Control Layer & Fluid Desktop Assistant for macOS**  
+*100% Offline · Core ML & Neural Engine · Bilingual (English & Swahili) · Liquid Glass Dynamic Island*
 
-**Open-weight typed decisions on Apple Silicon. Core ML, Neural Engine, zero generated tokens.**
+[![macOS](https://img.shields.io/badge/macOS-13.0%2B-blue.svg?logo=apple)](https://apple.com)
+[![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange.svg?logo=swift)](https://swift.org)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-yellow.svg?logo=python)](https://python.org)
+[![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
 
-[PyPI](https://pypi.org/project/laya-coreml/) · [Hugging Face weights](https://huggingface.co/aac6fef/laya-multilingual-coreml-ane) · [中文](https://github.com/mizorewww/laya-coreml/blob/main/README.zh-CN.md)
+---
 
-A real Laya model plays Snake locally, with visible probabilities, score, length,
-latency and safety interventions. The GIF replays a recorded Core ML run at **1× speed**.
-The game uses explicit planner features and a visible cycle safety layer.
+## Highlights
 
-The complete active Snake loop sustained **49.1–50.0 decisions/s** across three
-uncapped 600-step episodes, with zero deaths and two safety interventions.
-[Game-loop timings and paced-rate limits](https://github.com/mizorewww/laya-coreml/blob/main/docs/SNAKE_BENCHMARKS.md)
-include rendering serialization; terminal painting is excluded.
+- **Dynamic Island Glass Dock**: Hugs the physical right bezel of the macOS display with a 25% opacity specular glass surface, responsive Control Center gauges (CoreML confidence, RAM, Assistant readiness), and interactive popovers.
+- **VoiceBeam Audio Spectrometer**: Direct native Swift implementation of [`Libraries.dev voice-glow`](https://libraries.dev/voice.html). Features 7 blooming chromatic lobes (`#FF4678`, `#3CBEFF`, `#AF46FF`, `#3CDE82`, `#FF9628`, `#5A64FF`, `#28C8BE`), harmonic alternating audio-reactive spectro waves, and a traveling sweep beam during active AI processing.
+- **ThinkingOrb Engine**: Native 60 FPS Core Graphics port of [`Libraries.dev thinking-orbs`](https://libraries.dev/orbs.html) with 9 mathematical states (`working`, `searching`, `solving`, `listening`, `connecting`, `weaving`, `composing`, `breathing`, `shaping`).
+- **Comprehensive Desktop Command System**:
+  - **Apple Notes**: "open notes app and write a new note", "update the existing one", "andika note mpya".
+  - **Apple Mail**: "send email with a message", "compose email to alice@example.com", "tuma barua pepe".
+  - **Desktop File Discovery & Creation**: "make new file named todo.txt", "find pdf", "latest screenshot", "tengeneza faili".
+  - **System Control**: Volume up/down, mute/unmute, lock screen, sleep mac, dark/light mode toggle.
+  - **Media Control**: Apple Music play, pause, next track, previous track ("cheza muziki", "simamisha").
+- **Global HotKey & Background Stream**: Instant toggle with **⌥ + Space** or **⌘ + ⇧ + Space**, real-time microphone stream with speech recognition, and automatic launch at login.
 
-**One short multilingual decision: 4.98 ms P50 / 5.31 ms P95 on M3 Max with ANE FP16.**
-The same experiment measured **2.78× better whole-system energy per decision** than
-compiled MLX FP16. A separately validated W8 palette variant reached 4.88 ms and
-3.19× energy improvement. These are single-question results, not full Snake frame
-times; the requested 10× improvement was not achieved.
+---
 
-## Run the demo
+## Architecture
 
-Apple Silicon · macOS 15+ · Python 3.11–3.13.
+```
+┌──────────────────────────────────────────────────────────────┐
+│                     Speed-X macOS Panel                      │
+├──────────────────────────────┬───────────────────────────────┤
+│  Fluid Glass Popover Card    │   Bezel-Anchored Island Dock  │
+│  • Thinking Orb Stage        │   • CoreML Decision Gauge     │
+│  • Speech / Text Input       │   • System RAM & CPU Gauge    │
+│  • VoiceBeam Spectro Waves   │   • Assistant Readiness Gauge │
+│  • Quick Actions (Cheza, etc)│                               │
+│  • 100% Offline Status       │                               │
+└──────────────────────────────┴───────────────────────────────┘
+```
 
+---
+
+## Quick Start
+
+### 1. Build and Run App
 ```bash
-pip install 'laya-coreml[demo]'
-hf download aac6fef/laya-multilingual-coreml-ane --local-dir models/snake
-laya-coreml-snake --model ./models/snake
+# Clone the repository
+git clone https://github.com/festomanolo/speed-x.git
+cd speed-x
+
+# Compile Swift UI and build SpeedX.app & DMG
+bash scripts/build_app.sh
+
+# Launch Speed-X
+open dist/SpeedX.app
 ```
 
-Download once, then play offline. No PyTorch, Transformers or MLX is needed for
-inference. The terminal needs 104 columns × 35 rows. Space pauses; ↑/↓ changes
-speed; R resets; Q quits. First-time Core ML initialization can take tens of seconds.
-
-[Controls, recording and video export](https://github.com/mizorewww/laya-coreml/blob/main/docs/SNAKE_DEMO.md)
-· [Measured stable decision rates](https://github.com/mizorewww/laya-coreml/blob/main/docs/SNAKE_BENCHMARKS.md)
-· [Shareable video and recording provenance](https://github.com/mizorewww/laya-coreml/blob/main/docs/LAUNCH.md)
-
-## Ask for a decision
-
+### 2. Interactive CLI Shell
 ```bash
-pip install laya-coreml
+# Set up Python environment
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Run interactive CLI
+python3 main.py
 ```
 
-```python
-import laya_coreml as laya
-
-agent = laya.load("aac6fef/laya-multilingual-coreml-ane")
-result = agent.predict(
-    "The customer requests a refund of a duplicate payment.",
-    {
-        "refund": {
-            "type": "noul",
-            "instructions": "Does the customer request a refund?",
-        }
-    },
-)
-print(result["answers"]["refund"])
+### 3. Run Automated Tests
+```bash
+.venv/bin/python -m unittest discover tests
 ```
 
-Laya returns probabilities for **choice**, ordinal **score**, and boolean **noul**
-questions. There is no autoregressive decoding or generated JSON to parse. Hub
-models download before initialization; subsequent predictions stay local. Pass
-`local_files_only=True` to require an existing cache, or load a local directory.
+---
 
-Following upstream v0.3.5, fitted calibration temperatures are clamped to
-`[0.5, 5.0]` before use: the shipped `choice:11+` bucket is 0.1006, which would
-sharpen logits ~10x and report a coin flip as near-certainty. The checkpoint's
-raw values remain available as `agent.temperature_raw` and
-`agent.temperature_by_options_raw`, and a `RuntimeWarning` names every clamped
-bucket at load.
+## Voice & Text Commands Reference
 
-The ANE bundle has a **96-token total limit**, including question, options and
-state. Longer requests raise a capacity error. Use
-`aac6fef/laya-multilingual-coreml` for the general-purpose 1024-token model.
-[Full API, model selection and offline usage](https://github.com/mizorewww/laya-coreml/blob/main/docs/USAGE.md).
+| English Command | Swahili / Sheng Command | Action |
+|---|---|---|
+| `open notes app and write a new note` | `andika note mpya` | Creates a new note in Apple Notes |
+| `update the existing one` | `ongeza kwenye note` | Appends update to latest Apple Note |
+| `make new file` | `tengeneza faili jipya` | Generates a new file on Desktop and reveals in Finder |
+| `send email with a message` | `tuma email` | Composes draft in Apple Mail |
+| `volume up` / `volume down` | `ongeza sauti` / `punguza sauti` | Native system audio control |
+| `play music` / `pause music` | `cheza muziki` / `simamisha muziki` | Controls macOS Music app |
+| `lock screen` / `sleep mac` | `funga screen` / `laza mac` | Secure system intervention |
+| `read clipboard` / `inspect clipboard` | `angalia clipboard` | Real-time clipboard inspector |
 
-## Measured on M3 Max
+---
 
-40-core GPU, 128 GiB, macOS 27.2. One 91-token question padded to 96, including
-prompt preparation, tokenization, arrays, synchronous inference, calibration and
-formatting. Loading and warmup are excluded. MLX enables compile, prefix caching
-and shape buckets. Six alternating 20-second blocks per implementation produced
-**65,598 stable calls**.
+## License
 
-| Metric | Compiled MLX FP16 | Core ML ANE FP16 | Core ML ANE W8 |
-|---|---:|---:|---:|
-| P50 / P95 | 6.94 / 7.39 ms | **4.98 / 5.31 ms** | **4.88 / 5.23 ms** |
-| Mean system power estimate | 61.39 W | 30.75 W | 27.39 W |
-| System energy / decision | 0.4288 J | **0.1540 J** | **0.1344 J** |
-| Speed gain | 1× | **1.39×** | **1.42×** |
-| System energy gain | 1× | **2.78×** | **3.19×** |
-
-Energy uses direct SMC PSTR sensor readings, with raw samples and explicit anomaly
-rejection. This is an estimate with sensor and background-load uncertainty.
-**Speed gain × average power ratio = energy gain**; multiplying energy by speed
-again would double-count time. The W8 variant compresses weights while retaining
-FP16 compute. It is approximate, and its package-size reduction is not a speed ratio.
-
-[Speed, energy and hardware evidence](https://github.com/mizorewww/laya-coreml/blob/main/docs/ANE_BENCHMARKS.md)
-· [Raw measurements](https://github.com/mizorewww/laya-coreml/tree/main/benchmarks/results).
-
-## Available checkpoints
-
-| Hugging Face bundle | Default engine | Capacity | Purpose |
-|---|---|---:|---|
-| [Laya 421M](https://huggingface.co/aac6fef/laya-coreml) | CPU + GPU | 512 tokens | Original English model |
-| [Multilingual 322M](https://huggingface.co/aac6fef/laya-multilingual-coreml) | CPU + GPU | 1024 tokens | General multilingual decisions |
-| [Typed Decisions 421M](https://huggingface.co/aac6fef/laya-typed-decisions-coreml) | CPU + GPU | 1024 tokens | Original specialized checkpoint |
-| [Snake GPU](https://huggingface.co/aac6fef/laya-multilingual-coreml-snake) | CPU + GPU | B3 / L64 | Batches the three compact game questions |
-| [Multilingual ANE](https://huggingface.co/aac6fef/laya-multilingual-coreml-ane) | CPU + ANE | B1 / L96 | Short decisions, FP16 |
-| [Multilingual ANE W8](https://huggingface.co/aac6fef/laya-multilingual-coreml-ane-w8) | CPU + ANE | B1 / L96 | Optional approximate palette compression |
-
-Every bundle includes tokenizer/configuration, model card, provenance, checksums
-and packaging-time validation. ANE bundles also include the exact original host
-embedding/action tensors they need. No original training checkout is required.
-
-## Port fidelity and limits
-
-The three general-purpose FP16 checkpoints match upstream selected answers on
-**189/189 validation questions**. Each passes 100 repeated calls. ANE FP16 L96
-passes **59/59 fitting questions**, with maximum calibrated-probability drift
-0.002925; W8 passes the same subset with drift 0.014393 under an unchanged 0.02
-gate. Six- and four-bit experiments failed that gate and are not published weights.
-These are conversion-fidelity fixtures, not proof of general task accuracy.
-
-A separately exported FP16 ANE L1024 graph passes the complete **63/63** fixture,
-but an actual 1024-token request takes about **91.7 ms** in its serial screen.
-The short ANE result does not establish a long-context advantage. A 600-step
-paired Snake check matches **600/600 actions**, with zero deaths and zero shield
-interventions; the current ANE adapter's three sequential calls do not establish
-a consistent full-game speedup over compiled MLX.
-
-The ordinary SDPA Core ML export and the ANE graph are different implementations.
-The ordinary export defaults to CPU+GPU after unrestricted RangeDim GPU shapes
-failed local fidelity checks. Changing its device setting alone does not reproduce
-the ANE result. The ANE rewrite uses BC1L activations, 1×1 projections and per-head
-attention; its plan and a separate Instruments trace support Neural Engine work.
-CPU still handles input/output boundaries.
-
-## Documentation and reproducibility
-
-- [Install and Python/CLI API](https://github.com/mizorewww/laya-coreml/blob/main/docs/USAGE.md)
-- [Snake demo and media](https://github.com/mizorewww/laya-coreml/blob/main/docs/SNAKE_DEMO.md)
-- [Release artifacts and pinned Hub revisions](https://github.com/mizorewww/laya-coreml/blob/main/docs/RELEASE.md)
-- [General Core ML benchmarks](https://github.com/mizorewww/laya-coreml/blob/main/BENCHMARKS.md)
-- [ANE engineering experiments](https://github.com/mizorewww/laya-coreml/blob/main/docs/ANE_ENGINEERING.md)
-- [Mathematical investigation of the 10× target](https://github.com/mizorewww/laya-coreml/blob/main/docs/ANE_MATH.md)
-- [Conversion issues and supported shapes](https://github.com/mizorewww/laya-coreml/blob/main/docs/CONVERSION.md)
-
-To export yourself, install `laya-coreml[convert]` and run
-`laya-coreml convert laya-multilingual models/custom`. ANE research conversion,
-compression and benchmark scripts live in the Git checkout. The inference wheel
-contains the portable runtime and optional terminal demo.
-
-Apache-2.0. Independent port of [Laya](https://github.com/NandhaKishorM/laya), by
-Convai Innovations and contributors, building on the [MLX sibling project](https://github.com/mizorewww/laya-mlx).
-Not an official Convai Innovations or Apple release. See
-[NOTICE](https://github.com/mizorewww/laya-coreml/blob/main/NOTICE).
+Apache License 2.0. Copyright (c) 2026 festomanolo.
