@@ -17,8 +17,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let screenFrame = screen.frame
         let visibleFrame = screen.visibleFrame
 
-        let winWidth: CGFloat = 380
-        let winHeight: CGFloat = 360
+        let winWidth: CGFloat = 470
+        let winHeight: CGFloat = 440
 
         // Position: Hugging the far right edge of the screen, just beneath the top menu bar
         let originX = screenFrame.maxX - winWidth
