@@ -30,7 +30,6 @@ class IslandView: NSView, NSTextFieldDelegate {
     private var trackingArea: NSTrackingArea?
     private var inputField: NSTextField?
     private var micButton: NSButton?
-    private var waveView: SpectrometerWaveView?
     private var voiceGlowView: VoiceGlowBeamView?
     private var thinkingOrbView: ThinkingOrbView?
     private var actionButtons: [NSButton] = []
@@ -43,7 +42,7 @@ class IslandView: NSView, NSTextFieldDelegate {
     // Layout Dimensions
     let islandWidth: CGFloat = 72
     let popoverWidth: CGFloat = 320
-    let gap: CGFloat = 12
+    let gap: CGFloat = 14
 
     var isDarkMode: Bool {
         if let match = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) {
@@ -160,7 +159,6 @@ class IslandView: NSView, NSTextFieldDelegate {
             btn.contentTintColor = dark ? .white : NSColor(calibratedWhite: 0.12, alpha: 1.0)
         }
 
-        waveView?.isDarkMode = dark
         thinkingOrbView?.isDarkMode = dark
         voiceGlowView?.isDarkMode = dark
         canvasView?.needsDisplay = true
@@ -267,15 +265,7 @@ class IslandView: NSView, NSTextFieldDelegate {
             }
         }
 
-        // Gemini Live Spectrometer Wave View
-        let wv = SpectrometerWaveView(frame: NSRect(x: 20, y: 82, width: popoverWidth - 40, height: 30))
-        wv.isDarkMode = isDarkMode
-        wv.isHidden = true
-        addSubview(wv)
-        self.waveView = wv
-
         SpeechManager.shared.onAudioLevel = { [weak self] level in
-            self?.waveView?.setAudioLevel(level)
             self?.voiceGlowView?.setAudioLevel(level)
         }
 
@@ -285,9 +275,7 @@ class IslandView: NSView, NSTextFieldDelegate {
             if isRecording {
                 self.thinkingOrbView?.state = .listening
                 self.voiceGlowView?.isProcessing = false
-                self.waveView?.startAnimating()
             } else {
-                self.waveView?.stopAnimating()
                 if !(self.voiceGlowView?.isProcessing ?? false) {
                     self.thinkingOrbView?.state = .breathing
                 }
@@ -423,8 +411,8 @@ class IslandView: NSView, NSTextFieldDelegate {
 
         if loc.x >= rightX {
             let islandTop: CGFloat = 20
-            let gaugeSpacing: CGFloat = 86
-            let gauge1Y = islandTop + 54
+            let gaugeSpacing: CGFloat = 90
+            let gauge1Y = islandTop + 56
             let gauge2Y = gauge1Y + gaugeSpacing
             let gauge3Y = gauge2Y + gaugeSpacing
 
@@ -455,8 +443,8 @@ class IslandView: NSView, NSTextFieldDelegate {
 
         if loc.x >= rightX {
             let islandTop: CGFloat = 20
-            let gaugeSpacing: CGFloat = 86
-            let gauge1Y = islandTop + 54
+            let gaugeSpacing: CGFloat = 90
+            let gauge1Y = islandTop + 56
             let gauge2Y = gauge1Y + gaugeSpacing
             let gauge3Y = gauge2Y + gaugeSpacing
 
@@ -476,12 +464,6 @@ class IslandView: NSView, NSTextFieldDelegate {
 
         // Check if micButton was clicked
         if let mic = micButton, !mic.isHidden, mic.frame.contains(loc) {
-            SpeechManager.shared.toggleRecording()
-            return
-        }
-
-        // Check if waveView was clicked (to stop recording)
-        if let wv = waveView, !wv.isHidden, wv.frame.contains(loc) {
             SpeechManager.shared.toggleRecording()
             return
         }
@@ -512,10 +494,8 @@ class IslandView: NSView, NSTextFieldDelegate {
             thinkingOrbView?.state = .breathing
         }
 
-        // When recording: show Gemini Live Spectrometer Wave, hide quick actions
-        waveView?.isHidden = !(showAssistantControls && isRecording)
         for btn in actionButtons {
-            btn.isHidden = !(showAssistantControls && !isRecording)
+            btn.isHidden = !showAssistantControls
         }
     }
 
@@ -545,25 +525,24 @@ class IslandView: NSView, NSTextFieldDelegate {
             }
 
             // 1. Thinking Orb Stage (BELOW THE TEXT OF SPEED-X ASSISTANT)
-            let orbSize: CGFloat = 52.0
+            let orbSize: CGFloat = 54.0
             thinkingOrbView?.frame = NSRect(x: cardRect.minX + (popoverWidth - orbSize) / 2, y: cardRect.minY + 44, width: orbSize, height: orbSize)
 
             // 2. Text Input + Mic Button Row
-            let inputH: CGFloat = 30.0
-            let micW: CGFloat = 30.0
+            let inputH: CGFloat = 32.0
+            let micW: CGFloat = 32.0
             let micGap: CGFloat = 8.0
             let inputW = popoverWidth - 40 - micW - micGap
-            inputField?.frame = NSRect(x: cardRect.minX + 20, y: cardRect.minY + 110, width: inputW, height: inputH)
-            micButton?.frame = NSRect(x: cardRect.minX + 20 + inputW + micGap, y: cardRect.minY + 110, width: micW, height: inputH)
+            inputField?.frame = NSRect(x: cardRect.minX + 20, y: cardRect.minY + 108, width: inputW, height: inputH)
+            micButton?.frame = NSRect(x: cardRect.minX + 20 + inputW + micGap, y: cardRect.minY + 108, width: micW, height: inputH)
 
             // 3. Voice Animation Bar (BELOW TEXT INPUT)
-            voiceGlowView?.frame = NSRect(x: cardRect.minX + 20, y: cardRect.minY + 148, width: popoverWidth - 40, height: 26)
-            waveView?.frame = NSRect(x: cardRect.minX + 20, y: cardRect.minY + 148, width: popoverWidth - 40, height: 26)
+            voiceGlowView?.frame = NSRect(x: cardRect.minX + 20, y: cardRect.minY + 148, width: popoverWidth - 40, height: 32)
 
-            // 4. Action Buttons (AFTER CONSIDERABLE 22px SPACING GAP)
+            // 4. Action Buttons (AFTER CONSIDERABLE 24px SPACING GAP)
             let btnWidth: CGFloat = (popoverWidth - 40 - 18) / 4
             for (i, btn) in actionButtons.enumerated() {
-                btn.frame = NSRect(x: cardRect.minX + 20 + CGFloat(i) * (btnWidth + 6), y: cardRect.minY + 196, width: btnWidth, height: 26)
+                btn.frame = NSRect(x: cardRect.minX + 20 + CGFloat(i) * (btnWidth + 6), y: cardRect.minY + 204, width: btnWidth, height: 28)
             }
         } else {
             popoverBlur.isHidden = true
@@ -578,22 +557,23 @@ class IslandView: NSView, NSTextFieldDelegate {
         let islandRight = w
         let islandLeft = islandRight - islandWidth
         let islandTop: CGFloat = 20
-        let islandBottom: CGFloat = 345
+        let islandBottom: CGFloat = 385
 
         let islandRect = NSRect(x: islandLeft, y: islandTop, width: islandWidth, height: islandBottom - islandTop)
 
         let gaugeCenterX = islandLeft + (islandWidth / 2) + 2
-        let gauge1CenterY: CGFloat = islandTop + 54
-        let gauge2CenterY: CGFloat = gauge1CenterY + 86
-        let gauge3CenterY: CGFloat = gauge2CenterY + 86
+        let gaugeSpacing: CGFloat = 90
+        let gauge1CenterY: CGFloat = islandTop + 56
+        let gauge2CenterY: CGFloat = gauge1CenterY + gaugeSpacing
+        let gauge3CenterY: CGFloat = gauge2CenterY + gaugeSpacing
 
         var targetArrowY: CGFloat = gauge1CenterY
         if activeGauge == .system { targetArrowY = gauge2CenterY }
         else if activeGauge == .assistant { targetArrowY = gauge3CenterY }
 
-        let cardHeight: CGFloat = (activeGauge == .assistant) ? 275.0 : 180.0
+        let cardHeight: CGFloat = (activeGauge == .assistant) ? 300.0 : 180.0
         let popoverX = bounds.maxX - islandWidth - gap - popoverWidth
-        let popoverY = max(10, min(bounds.height - cardHeight - 10, targetArrowY - cardHeight / 2))
+        let popoverY = max(20, min(bounds.height - cardHeight - 20, targetArrowY - cardHeight / 2))
         let cardRect = NSRect(x: popoverX, y: popoverY, width: popoverWidth, height: cardHeight)
 
         // Update glass backdrops below canvas
@@ -854,7 +834,7 @@ class IslandView: NSView, NSTextFieldDelegate {
         drawText("EN • SW", at: CGPoint(x: badgeRect.minX + 13, y: badgeRect.minY + 3), font: .boldSystemFont(ofSize: 9), color: secText)
 
         // 2. Thinking Orb Dedicated Hero Stage Pedestal (BELOW THE TEXT OF SPEED-X ASSISTANT)
-        let orbCenterY: CGFloat = rect.minY + 70
+        let orbCenterY: CGFloat = rect.minY + 71
         let orbCenterX = rect.minX + (popoverWidth / 2)
 
         // Concentric ambient halo pedestal behind orb
@@ -878,18 +858,18 @@ class IslandView: NSView, NSTextFieldDelegate {
         ringPath.lineWidth = 0.8
         ringPath.stroke()
 
-        // 3. Status Line at the bottom of the card (y: rect.minY + 236)
+        // 3. Status Line at the bottom of the card (y: rect.minY + 252)
         if voiceGlowView?.isProcessing == true {
             let workingColor = dark ? NSColor(calibratedRed: 0, green: 229/255, blue: 255/255, alpha: 1.0)
                                     : NSColor(calibratedRed: 0, green: 122/255, blue: 255/255, alpha: 1.0)
             if let img = NSImage(systemSymbolName: "sparkles", accessibilityDescription: nil) {
                 let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold).applying(.init(paletteColors: [workingColor]))
                 if let configured = img.withSymbolConfiguration(config) {
-                    let iconRect = NSRect(x: padX + 4, y: rect.minY + 236, width: 14, height: 14)
+                    let iconRect = NSRect(x: padX + 4, y: rect.minY + 252, width: 14, height: 14)
                     configured.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1.0)
                 }
             }
-            drawText("Speed-X Engine Working...", at: CGPoint(x: padX + 24, y: rect.minY + 236), font: .boldSystemFont(ofSize: 10), color: workingColor)
+            drawText("Speed-X Engine Working...", at: CGPoint(x: padX + 24, y: rect.minY + 252), font: .boldSystemFont(ofSize: 10), color: workingColor)
         } else if let last = SpeedXRunner.shared.lastResponse {
             let iconSymbol = last.success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
             let statusColor = last.success
@@ -899,22 +879,22 @@ class IslandView: NSView, NSTextFieldDelegate {
             if let img = NSImage(systemSymbolName: iconSymbol, accessibilityDescription: nil) {
                 let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold).applying(.init(paletteColors: [statusColor]))
                 if let configured = img.withSymbolConfiguration(config) {
-                    let iconRect = NSRect(x: padX + 4, y: rect.minY + 236, width: 14, height: 14)
+                    let iconRect = NSRect(x: padX + 4, y: rect.minY + 252, width: 14, height: 14)
                     configured.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1.0)
                 }
             }
-            drawText(last.message, at: CGPoint(x: padX + 24, y: rect.minY + 236), font: .systemFont(ofSize: 10), color: statusColor)
+            drawText(last.message, at: CGPoint(x: padX + 24, y: rect.minY + 252), font: .systemFont(ofSize: 10), color: statusColor)
         } else {
             // Idle ready
             let readyColor = dark ? NSColor(calibratedRed: 74/255, green: 222/255, blue: 128/255, alpha: 1.0) : NSColor(calibratedRed: 22/255, green: 135/255, blue: 60/255, alpha: 1.0)
             if let img = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) {
                 let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold).applying(.init(paletteColors: [readyColor]))
                 if let configured = img.withSymbolConfiguration(config) {
-                    let iconRect = NSRect(x: padX + 4, y: rect.minY + 236, width: 14, height: 14)
+                    let iconRect = NSRect(x: padX + 4, y: rect.minY + 252, width: 14, height: 14)
                     configured.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1.0)
                 }
             }
-            drawText("Speed-X Engine Ready · 100% Offline", at: CGPoint(x: padX + 24, y: rect.minY + 236), font: .systemFont(ofSize: 10), color: secText)
+            drawText("Speed-X Engine Ready · 100% Offline", at: CGPoint(x: padX + 24, y: rect.minY + 252), font: .systemFont(ofSize: 10), color: secText)
         }
     }
 
