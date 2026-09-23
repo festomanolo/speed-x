@@ -19,8 +19,18 @@ class CanvasView: NSView {
 }
 
 class IslandView: NSView, NSTextFieldDelegate {
-    var activeGauge: ActiveGauge = .laya
-    var isHovered: Bool = true
+    var activeGauge: ActiveGauge = .laya {
+        didSet {
+            updateInteractiveControls()
+            canvasView?.needsDisplay = true
+        }
+    }
+    var isHovered: Bool = true {
+        didSet {
+            updateInteractiveControls()
+            canvasView?.needsDisplay = true
+        }
+    }
     var isPinned: Bool = false
 
     var snapshot = SystemStats.shared.getSnapshot()
@@ -30,6 +40,10 @@ class IslandView: NSView, NSTextFieldDelegate {
     private var trackingArea: NSTrackingArea?
     private var inputField: NSTextField?
     private var micButton: NSButton?
+    private var agentPillButton: NSButton?
+    private var closeButton: NSButton?
+    private var currentAgentModeIndex: Int = 0
+    private let agentModes = ["Agent (auto) ⌵", "Notes & Mail ⌵", "Desktop Ops ⌵", "Swahili • EN ⌵"]
     private var voiceGlowView: VoiceGlowBeamView?
     private var thinkingOrbView: ThinkingOrbView?
     private var actionButtons: [NSButton] = []
@@ -141,22 +155,31 @@ class IslandView: NSView, NSTextFieldDelegate {
         popoverBlur?.appearance = NSAppearance(named: appearanceName)
 
         // Update input field for light vs dark mode
-        inputField?.textColor = dark ? .white : NSColor(calibratedWhite: 0.10, alpha: 1.0)
-        inputField?.backgroundColor = dark ? NSColor(white: 1.0, alpha: 0.12) : NSColor(white: 1.0, alpha: 0.28)
-        inputField?.layer?.borderColor = dark ? NSColor(white: 1.0, alpha: 0.25).cgColor : NSColor(white: 1.0, alpha: 0.65).cgColor
+        inputField?.textColor = dark ? NSColor(calibratedWhite: 0.94, alpha: 1.0) : NSColor(calibratedWhite: 0.10, alpha: 1.0)
+        inputField?.backgroundColor = .clear
 
         // Update mic button
         if !(SpeechManager.shared.isRecording) {
-            micButton?.layer?.backgroundColor = dark ? NSColor(white: 1.0, alpha: 0.15).cgColor : NSColor(white: 1.0, alpha: 0.30).cgColor
-            micButton?.layer?.borderColor = dark ? NSColor(white: 1.0, alpha: 0.22).cgColor : NSColor(white: 1.0, alpha: 0.60).cgColor
+            micButton?.layer?.backgroundColor = dark ? NSColor(calibratedRed: 38/255, green: 42/255, blue: 48/255, alpha: 0.70).cgColor : NSColor(white: 1.0, alpha: 0.28).cgColor
+            micButton?.layer?.borderColor = dark ? NSColor(white: 1.0, alpha: 0.15).cgColor : NSColor(white: 1.0, alpha: 0.55).cgColor
             micButton?.contentTintColor = dark ? .white : NSColor(calibratedWhite: 0.12, alpha: 1.0)
         }
 
+        // Update close button
+        closeButton?.layer?.backgroundColor = dark ? NSColor(calibratedRed: 38/255, green: 42/255, blue: 48/255, alpha: 0.70).cgColor : NSColor(white: 1.0, alpha: 0.28).cgColor
+        closeButton?.layer?.borderColor = dark ? NSColor(white: 1.0, alpha: 0.15).cgColor : NSColor(white: 1.0, alpha: 0.55).cgColor
+        closeButton?.contentTintColor = dark ? NSColor(white: 0.90, alpha: 1.0) : NSColor(calibratedWhite: 0.12, alpha: 1.0)
+
+        // Update agent pill button
+        agentPillButton?.layer?.backgroundColor = dark ? NSColor(calibratedRed: 38/255, green: 42/255, blue: 48/255, alpha: 0.70).cgColor : NSColor(white: 1.0, alpha: 0.25).cgColor
+        agentPillButton?.layer?.borderColor = dark ? NSColor(white: 1.0, alpha: 0.15).cgColor : NSColor(white: 1.0, alpha: 0.50).cgColor
+        agentPillButton?.contentTintColor = dark ? NSColor(white: 0.90, alpha: 1.0) : NSColor(calibratedWhite: 0.12, alpha: 1.0)
+
         // Update action buttons for light vs dark mode
         for btn in actionButtons {
-            btn.layer?.backgroundColor = dark ? NSColor(white: 1.0, alpha: 0.15).cgColor : NSColor(white: 1.0, alpha: 0.30).cgColor
-            btn.layer?.borderColor = dark ? NSColor(white: 1.0, alpha: 0.22).cgColor : NSColor(white: 1.0, alpha: 0.60).cgColor
-            btn.contentTintColor = dark ? .white : NSColor(calibratedWhite: 0.12, alpha: 1.0)
+            btn.layer?.backgroundColor = dark ? NSColor(white: 1.0, alpha: 0.12).cgColor : NSColor(white: 1.0, alpha: 0.25).cgColor
+            btn.layer?.borderColor = dark ? NSColor(white: 1.0, alpha: 0.20).cgColor : NSColor(white: 1.0, alpha: 0.50).cgColor
+            btn.contentTintColor = dark ? NSColor(white: 0.90, alpha: 1.0) : NSColor(calibratedWhite: 0.12, alpha: 1.0)
         }
 
         thinkingOrbView?.isDarkMode = dark
@@ -192,64 +215,112 @@ class IslandView: NSView, NSTextFieldDelegate {
         canvasView = CanvasView(frame: bounds)
         canvasView.islandView = self
         canvasView.wantsLayer = true
+        canvasView.layer?.zPosition = 1
         addSubview(canvasView)
     }
 
     private func setupInputControls() {
-        // Voice-Glow Beam View along bottom of input box
-        let vg = VoiceGlowBeamView(frame: NSRect(x: 16, y: 44, width: popoverWidth - 32, height: 34))
+        // 1. Voice-Glow Beam View (Anchored along the bottom of the card)
+        let vg = VoiceGlowBeamView(frame: NSRect(x: 16, y: 160, width: popoverWidth, height: 125))
         vg.isDarkMode = isDarkMode
+        vg.cornerRadius = 22.0
+        vg.wantsLayer = true
+        vg.layer?.zPosition = 5
         vg.isHidden = true
         addSubview(vg)
         self.voiceGlowView = vg
 
-        // Thinking Orb View (Libraries.dev thought-orb loading indicator)
-        let orb = ThinkingOrbView(frame: NSRect(x: 20, y: 15, width: 22, height: 22))
+        // 2. Thinking Orb View (Libraries.dev thought-orb loading indicator)
+        let orb = ThinkingOrbView(frame: NSRect(x: 20, y: 15, width: 20, height: 20))
         orb.isDarkMode = isDarkMode
         orb.state = .breathing
+        orb.wantsLayer = true
+        orb.layer?.zPosition = 5
         orb.isHidden = true
         addSubview(orb)
         self.thinkingOrbView = orb
 
-        let micW: CGFloat = 28
-        let micGap: CGFloat = 6
-        let inputW = popoverWidth - 40 - micW - micGap
-
-        let tf = NSTextField(frame: NSRect(x: 20, y: 48, width: inputW, height: 28))
-        tf.placeholderString = "Andika au sema... (e.g. ongeza sauti)"
-        tf.font = NSFont.systemFont(ofSize: 11.5)
-        tf.textColor = NSColor(calibratedWhite: 0.10, alpha: 1.0)
-        tf.backgroundColor = NSColor(white: 1.0, alpha: 0.40)
+        // 3. Conversational Prompt Text Area (Multi-line prompt display with spacious typography)
+        let tf = NSTextField(frame: NSRect(x: 20, y: 46, width: popoverWidth - 40, height: 68))
+        tf.placeholderString = "Set a timer for ten minutes and\nremind me to water the plants"
+        tf.font = NSFont.systemFont(ofSize: 16.5, weight: .regular)
+        tf.textColor = NSColor(calibratedWhite: 0.94, alpha: 1.0)
+        tf.backgroundColor = .clear
+        tf.drawsBackground = false
         tf.isBordered = false
-        tf.wantsLayer = true
-        tf.layer?.cornerRadius = 8
-        tf.layer?.borderWidth = 1.0
-        tf.layer?.borderColor = NSColor(white: 1.0, alpha: 0.80).cgColor
+        tf.alignment = .center
+        tf.cell?.wraps = true
+        tf.cell?.isScrollable = false
         tf.focusRingType = .none
         tf.delegate = self
+        tf.wantsLayer = true
+        tf.layer?.zPosition = 5
         tf.isHidden = true
         addSubview(tf)
         self.inputField = tf
 
-        // Microphone Button
-        let mic = NSButton(frame: NSRect(x: 20 + inputW + micGap, y: 48, width: micW, height: 28))
+        // 4. Floating Control Bar - Left Pill: Agent Mode Selector ("Agent (auto) ⌵")
+        let agentBtn = NSButton(frame: NSRect(x: 20, y: 220, width: 114, height: 36))
+        agentBtn.title = "Agent (auto) ⌵"
+        agentBtn.bezelStyle = .inline
+        agentBtn.isBordered = false
+        agentBtn.wantsLayer = true
+        agentBtn.layer?.cornerRadius = 18
+        agentBtn.layer?.borderWidth = 1.0
+        agentBtn.layer?.borderColor = NSColor(white: 1.0, alpha: 0.15).cgColor
+        agentBtn.layer?.backgroundColor = NSColor(calibratedRed: 38/255, green: 42/255, blue: 48/255, alpha: 0.70).cgColor
+        agentBtn.contentTintColor = NSColor(white: 0.90, alpha: 1.0)
+        agentBtn.font = NSFont.systemFont(ofSize: 12.5, weight: .regular)
+        agentBtn.target = self
+        agentBtn.action = #selector(onAgentPillClicked(_:))
+        agentBtn.layer?.zPosition = 10
+        agentBtn.isHidden = true
+        addSubview(agentBtn)
+        self.agentPillButton = agentBtn
+
+        // 5. Floating Control Bar - Right Circular: Microphone Button (36x36)
+        let mic = NSButton(frame: NSRect(x: popoverWidth - 102, y: 220, width: 36, height: 36))
         mic.bezelStyle = .inline
         mic.isBordered = false
         mic.wantsLayer = true
-        mic.layer?.cornerRadius = 8
+        mic.layer?.cornerRadius = 18
         mic.layer?.borderWidth = 1.0
-        mic.layer?.borderColor = NSColor(white: 1.0, alpha: 0.60).cgColor
-        mic.layer?.backgroundColor = NSColor(white: 1.0, alpha: 0.30).cgColor
+        mic.layer?.borderColor = NSColor(white: 1.0, alpha: 0.15).cgColor
+        mic.layer?.backgroundColor = NSColor(calibratedRed: 38/255, green: 42/255, blue: 48/255, alpha: 0.70).cgColor
         if let sym = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Record Audio") {
-            let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .bold)
+            let config = NSImage.SymbolConfiguration(pointSize: 13.0, weight: .semibold)
             mic.image = sym.withSymbolConfiguration(config)
         }
         mic.imagePosition = .imageOnly
+        mic.contentTintColor = .white
         mic.target = self
         mic.action = #selector(onMicButtonClicked(_:))
+        mic.layer?.zPosition = 10
         mic.isHidden = true
         addSubview(mic)
         self.micButton = mic
+
+        // 6. Floating Control Bar - Far Right Circular: Close Button (36x36)
+        let close = NSButton(frame: NSRect(x: popoverWidth - 56, y: 220, width: 36, height: 36))
+        close.bezelStyle = .inline
+        close.isBordered = false
+        close.wantsLayer = true
+        close.layer?.cornerRadius = 18
+        close.layer?.borderWidth = 1.0
+        close.layer?.borderColor = NSColor(white: 1.0, alpha: 0.15).cgColor
+        close.layer?.backgroundColor = NSColor(calibratedRed: 38/255, green: 42/255, blue: 48/255, alpha: 0.70).cgColor
+        if let sym = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close") {
+            let config = NSImage.SymbolConfiguration(pointSize: 11.5, weight: .semibold)
+            close.image = sym.withSymbolConfiguration(config)
+        }
+        close.imagePosition = .imageOnly
+        close.contentTintColor = NSColor(white: 0.90, alpha: 1.0)
+        close.target = self
+        close.action = #selector(onCloseButtonClicked(_:))
+        close.layer?.zPosition = 10
+        close.isHidden = true
+        addSubview(close)
+        self.closeButton = close
 
         // Wire SpeechManager callbacks
         SpeechManager.shared.onSpeechPartial = { [weak self] partial in
@@ -261,7 +332,6 @@ class IslandView: NSView, NSTextFieldDelegate {
             let cmd = (self.inputField?.stringValue ?? text).trimmingCharacters(in: .whitespaces)
             if !cmd.isEmpty {
                 self.triggerCommand(cmd)
-                self.inputField?.stringValue = ""
             }
         }
 
@@ -290,12 +360,12 @@ class IslandView: NSView, NSTextFieldDelegate {
             ("Nakili", "doc.on.clipboard", "inspect clipboard")
         ]
 
-        let btnWidth: CGFloat = (popoverWidth - 40 - 18) / 4
+        let btnWidth: CGFloat = (popoverWidth - 44 - 18) / 4
         for (i, (label, iconName, cmd)) in actions.enumerated() {
-            let btn = NSButton(frame: NSRect(x: 20 + CGFloat(i) * (btnWidth + 6), y: 84, width: btnWidth, height: 26))
+            let btn = NSButton(frame: NSRect(x: 22 + CGFloat(i) * (btnWidth + 6), y: 116, width: btnWidth, height: 24))
             btn.title = label
             if let sym = NSImage(systemSymbolName: iconName, accessibilityDescription: label) {
-                let config = NSImage.SymbolConfiguration(pointSize: 9.5, weight: .semibold)
+                let config = NSImage.SymbolConfiguration(pointSize: 9.0, weight: .semibold)
                 btn.image = sym.withSymbolConfiguration(config)
                 btn.imagePosition = .imageLeading
                 btn.imageScaling = .scaleProportionallyDown
@@ -303,19 +373,34 @@ class IslandView: NSView, NSTextFieldDelegate {
             btn.bezelStyle = .inline
             btn.isBordered = false
             btn.wantsLayer = true
-            btn.layer?.backgroundColor = NSColor(white: 1.0, alpha: 0.45).cgColor
-            btn.layer?.cornerRadius = 7
-            btn.layer?.borderWidth = 1.0
-            btn.layer?.borderColor = NSColor(white: 1.0, alpha: 0.75).cgColor
-            btn.contentTintColor = NSColor(calibratedWhite: 0.12, alpha: 1.0)
-            btn.font = NSFont.systemFont(ofSize: 10, weight: .semibold)
+            btn.layer?.backgroundColor = NSColor(white: 1.0, alpha: 0.12).cgColor
+            btn.layer?.cornerRadius = 6
+            btn.layer?.borderWidth = 0.8
+            btn.layer?.borderColor = NSColor(white: 1.0, alpha: 0.20).cgColor
+            btn.contentTintColor = NSColor(white: 0.90, alpha: 1.0)
+            btn.font = NSFont.systemFont(ofSize: 9.5, weight: .semibold)
             btn.target = self
             btn.action = #selector(onActionButtonClicked(_:))
             btn.identifier = NSUserInterfaceItemIdentifier(cmd)
+            btn.layer?.zPosition = 5
             btn.isHidden = true
             addSubview(btn)
             actionButtons.append(btn)
         }
+    }
+
+    @objc private func onAgentPillClicked(_ sender: NSButton) {
+        currentAgentModeIndex = (currentAgentModeIndex + 1) % agentModes.count
+        agentPillButton?.title = agentModes[currentAgentModeIndex]
+    }
+
+    @objc private func onCloseButtonClicked(_ sender: NSButton) {
+        isHovered = false
+        activeGauge = .none
+        isPinned = false
+        updateInteractiveControls()
+        canvasView.needsDisplay = true
+        window?.resignKey()
     }
 
     @objc private func onMicButtonClicked(_ sender: NSButton) {
@@ -325,23 +410,25 @@ class IslandView: NSView, NSTextFieldDelegate {
     private func updateMicButtonAppearance(isRecording: Bool) {
         let dark = isDarkMode
         if isRecording {
-            micButton?.layer?.backgroundColor = NSColor.systemRed.withAlphaComponent(0.35).cgColor
+            micButton?.layer?.backgroundColor = NSColor.systemRed.withAlphaComponent(0.40).cgColor
             micButton?.layer?.borderColor = NSColor.systemRed.cgColor
-            micButton?.contentTintColor = .systemRed
+            micButton?.contentTintColor = .white
             if let sym = NSImage(systemSymbolName: "record.circle.fill", accessibilityDescription: "Recording") {
-                let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .bold)
+                let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .bold)
                 micButton?.image = sym.withSymbolConfiguration(config)
             }
-            inputField?.placeholderString = "Listening... sema sasa..."
+            if inputField?.stringValue.isEmpty ?? true {
+                inputField?.placeholderString = "Listening... sema sasa..."
+            }
         } else {
-            micButton?.layer?.backgroundColor = dark ? NSColor(white: 1.0, alpha: 0.15).cgColor : NSColor(white: 1.0, alpha: 0.30).cgColor
-            micButton?.layer?.borderColor = dark ? NSColor(white: 1.0, alpha: 0.22).cgColor : NSColor(white: 1.0, alpha: 0.60).cgColor
+            micButton?.layer?.backgroundColor = dark ? NSColor(white: 1.0, alpha: 0.14).cgColor : NSColor(white: 1.0, alpha: 0.28).cgColor
+            micButton?.layer?.borderColor = dark ? NSColor(white: 1.0, alpha: 0.22).cgColor : NSColor(white: 1.0, alpha: 0.55).cgColor
             micButton?.contentTintColor = dark ? .white : NSColor(calibratedWhite: 0.12, alpha: 1.0)
             if let sym = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Record Audio") {
-                let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .bold)
+                let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .bold)
                 micButton?.image = sym.withSymbolConfiguration(config)
             }
-            inputField?.placeholderString = "Andika au sema... (e.g. ongeza sauti)"
+            inputField?.placeholderString = "Set a timer for ten minutes and\nremind me to water the plants"
         }
         canvasView.needsDisplay = true
     }
@@ -375,6 +462,10 @@ class IslandView: NSView, NSTextFieldDelegate {
                 self?.canvasView.needsDisplay = true
             }
         }
+    }
+
+    public func setAudioLevel(_ level: Double) {
+        voiceGlowView?.setAudioLevel(level)
     }
 
     func updateMetrics() {
@@ -462,6 +553,18 @@ class IslandView: NSView, NSTextFieldDelegate {
             return
         }
 
+        // Check if closeButton was clicked
+        if let close = closeButton, !close.isHidden, close.frame.contains(loc) {
+            onCloseButtonClicked(close)
+            return
+        }
+
+        // Check if agentPillButton was clicked
+        if let agent = agentPillButton, !agent.isHidden, agent.frame.contains(loc) {
+            onAgentPillClicked(agent)
+            return
+        }
+
         // Check if micButton was clicked
         if let mic = micButton, !mic.isHidden, mic.frame.contains(loc) {
             SpeechManager.shared.toggleRecording()
@@ -485,6 +588,8 @@ class IslandView: NSView, NSTextFieldDelegate {
 
         inputField?.isHidden = !showAssistantControls
         micButton?.isHidden = !showAssistantControls
+        closeButton?.isHidden = !showAssistantControls
+        agentPillButton?.isHidden = !showAssistantControls
         voiceGlowView?.isHidden = !showAssistantControls
         thinkingOrbView?.isHidden = !showAssistantControls
 
@@ -497,6 +602,40 @@ class IslandView: NSView, NSTextFieldDelegate {
         for btn in actionButtons {
             btn.isHidden = !showAssistantControls
         }
+
+        layoutSubviewsGeometry()
+    }
+
+    func layoutSubviewsGeometry() {
+        let w = bounds.width
+        guard w > 50 else { return }
+        let islandRight = w
+        let islandLeft = islandRight - islandWidth
+        let islandTop: CGFloat = 20
+        let islandBottom: CGFloat = 385
+
+        let islandRect = NSRect(x: islandLeft, y: islandTop, width: islandWidth, height: islandBottom - islandTop)
+
+        let gaugeSpacing: CGFloat = 90
+        let gauge1CenterY: CGFloat = islandTop + 56
+        let gauge2CenterY: CGFloat = gauge1CenterY + gaugeSpacing
+        let gauge3CenterY: CGFloat = gauge2CenterY + gaugeSpacing
+
+        var targetArrowY: CGFloat = gauge1CenterY
+        if activeGauge == .system { targetArrowY = gauge2CenterY }
+        else if activeGauge == .assistant { targetArrowY = gauge3CenterY }
+
+        let cardHeight: CGFloat = (activeGauge == .assistant) ? 280.0 : 180.0
+        let popoverX = bounds.maxX - islandWidth - gap - popoverWidth
+        let popoverY = max(20, min(bounds.height - cardHeight - 20, targetArrowY - cardHeight / 2))
+        let cardRect = NSRect(x: popoverX, y: popoverY, width: popoverWidth, height: cardHeight)
+
+        updateGlassBackdrops(islandRect: islandRect, cardRect: cardRect, arrowY: targetArrowY)
+    }
+
+    override func layout() {
+        super.layout()
+        layoutSubviewsGeometry()
     }
 
     // MARK: - Geometry & Mask Generation
@@ -517,33 +656,47 @@ class IslandView: NSView, NSTextFieldDelegate {
             popoverBlur.isHidden = false
             popoverBlur.frame = cardRect
             let localArrowY = arrowY - cardRect.minY
-            let cardPath = IslandShape.createPopoverPath(in: NSRect(origin: .zero, size: cardRect.size), arrowY: localArrowY, cornerRadius: 18)
+            let isAssistant = (activeGauge == .assistant)
+            let cardCornerRadius: CGFloat = isAssistant ? 22.0 : 18.0
+            let cardPath = IslandShape.createPopoverPath(in: NSRect(origin: .zero, size: cardRect.size), arrowY: localArrowY, cornerRadius: cardCornerRadius, hasArrow: !isAssistant)
             popoverBlur.maskImage = NSImage(size: cardRect.size, flipped: true) { _ in
                 NSColor.black.setFill()
                 cardPath.fill()
                 return true
             }
 
-            // 1. Thinking Orb Stage (BELOW THE TEXT OF SPEED-X ASSISTANT)
-            let orbSize: CGFloat = 54.0
-            thinkingOrbView?.frame = NSRect(x: cardRect.minX + (popoverWidth - orbSize) / 2, y: cardRect.minY + 44, width: orbSize, height: orbSize)
-
-            // 2. Text Input + Mic Button Row
-            let inputH: CGFloat = 32.0
-            let micW: CGFloat = 32.0
-            let micGap: CGFloat = 8.0
-            let inputW = popoverWidth - 40 - micW - micGap
-            inputField?.frame = NSRect(x: cardRect.minX + 20, y: cardRect.minY + 108, width: inputW, height: inputH)
-            micButton?.frame = NSRect(x: cardRect.minX + 20 + inputW + micGap, y: cardRect.minY + 108, width: micW, height: inputH)
-
-            // 3. Voice Animation Bar (BELOW TEXT INPUT)
-            voiceGlowView?.frame = NSRect(x: cardRect.minX + 20, y: cardRect.minY + 148, width: popoverWidth - 40, height: 32)
-
-            // 4. Action Buttons (AFTER CONSIDERABLE 24px SPACING GAP)
-            let btnWidth: CGFloat = (popoverWidth - 40 - 18) / 4
-            for (i, btn) in actionButtons.enumerated() {
-                btn.frame = NSRect(x: cardRect.minX + 20 + CGFloat(i) * (btnWidth + 6), y: cardRect.minY + 204, width: btnWidth, height: 28)
+            // 1. Thinking Orb Status Indicator (Hide in voice assistant mode so card is clean like reference)
+            thinkingOrbView?.isHidden = isAssistant
+            if !isAssistant {
+                let orbSize: CGFloat = 20.0
+                thinkingOrbView?.frame = NSRect(x: cardRect.maxX - 38, y: cardRect.minY + 16, width: orbSize, height: orbSize)
             }
+
+            // 2. Conversational Prompt Text Area (Centered in upper card with generous breathing room)
+            inputField?.frame = NSRect(x: cardRect.minX + 20, y: cardRect.minY + 48, width: cardRect.width - 40, height: 68)
+
+            // 3. Quick Action Chips (Only visible in non-assistant modes)
+            for btn in actionButtons {
+                btn.isHidden = isAssistant
+            }
+
+            // 4. VoiceBeam Aurora Stage (Spans bottom portion of card, height 125pt)
+            let glowH: CGFloat = 125.0
+            voiceGlowView?.frame = NSRect(x: cardRect.minX, y: cardRect.maxY - glowH, width: cardRect.width, height: glowH)
+            voiceGlowView?.cornerRadius = cardCornerRadius
+
+            // 5. Floating Bottom Controls (Overlying the VoiceBeam aurora glow)
+            let controlH: CGFloat = 36.0
+            let controlY: CGFloat = cardRect.maxY - controlH - 24.0
+
+            // Left: Agent Mode Capsule Pill
+            agentPillButton?.frame = NSRect(x: cardRect.minX + 20, y: controlY, width: 114, height: controlH)
+
+            // Right: Circular Mic and Close buttons (36x36)
+            let micX = cardRect.maxX - 20 - 36 - 10 - 36
+            let closeX = cardRect.maxX - 20 - 36
+            micButton?.frame = NSRect(x: micX, y: controlY, width: 36, height: controlH)
+            closeButton?.frame = NSRect(x: closeX, y: controlY, width: 36, height: controlH)
         } else {
             popoverBlur.isHidden = true
         }
@@ -571,7 +724,7 @@ class IslandView: NSView, NSTextFieldDelegate {
         if activeGauge == .system { targetArrowY = gauge2CenterY }
         else if activeGauge == .assistant { targetArrowY = gauge3CenterY }
 
-        let cardHeight: CGFloat = (activeGauge == .assistant) ? 300.0 : 180.0
+        let cardHeight: CGFloat = (activeGauge == .assistant) ? 280.0 : 180.0
         let popoverX = bounds.maxX - islandWidth - gap - popoverWidth
         let popoverY = max(20, min(bounds.height - cardHeight - 20, targetArrowY - cardHeight / 2))
         let cardRect = NSRect(x: popoverX, y: popoverY, width: popoverWidth, height: cardHeight)
@@ -606,24 +759,32 @@ class IslandView: NSView, NSTextFieldDelegate {
 
         // 3. Draw Popover Glass Overlays & Content
         if isHovered && activeGauge != .none {
-            let cardPath = IslandShape.createPopoverPath(in: cardRect, arrowY: targetArrowY, cornerRadius: 18)
+            let isAssistant = (activeGauge == .assistant)
+            let cardCornerRadius: CGFloat = isAssistant ? 22.0 : 18.0
+            let cardPath = IslandShape.createPopoverPath(in: cardRect, arrowY: targetArrowY, cornerRadius: cardCornerRadius, hasArrow: !isAssistant)
 
             ctx.saveGState()
             // Ambient soft drop shadow
             let shadowColor = dark ? NSColor(white: 0, alpha: 0.40) : NSColor(calibratedWhite: 0.1, alpha: 0.16)
             ctx.setShadow(offset: CGSize(width: -6, height: 10), blur: 22, color: shadowColor.cgColor)
 
-            // Transparent glassmorphism fill (25% opacity in light mode)
-            let popoverSurface = dark ? NSColor(calibratedRed: 16/255, green: 18/255, blue: 24/255, alpha: 0.25)
-                                      : NSColor(calibratedWhite: 1.0, alpha: 0.25)
+            // Translucent dark glassmorphism fill (rich dark contrast for assistant voice card)
+            let popoverSurface: NSColor
+            if dark {
+                popoverSurface = isAssistant ? NSColor(calibratedRed: 24/255, green: 26/255, blue: 30/255, alpha: 0.92)
+                                             : NSColor(calibratedRed: 16/255, green: 18/255, blue: 24/255, alpha: 0.25)
+            } else {
+                popoverSurface = isAssistant ? NSColor(calibratedWhite: 0.98, alpha: 0.92)
+                                             : NSColor(calibratedWhite: 1.0, alpha: 0.25)
+            }
             popoverSurface.setFill()
             cardPath.fill()
 
             // Specular border
-            let popoverRim = dark ? NSColor(calibratedWhite: 1.0, alpha: 0.35)
+            let popoverRim = dark ? NSColor(calibratedWhite: 1.0, alpha: isAssistant ? 0.15 : 0.35)
                                   : NSColor(calibratedWhite: 1.0, alpha: 0.85)
             popoverRim.setStroke()
-            cardPath.lineWidth = 1.2
+            cardPath.lineWidth = 1.0
             cardPath.stroke()
             ctx.restoreGState()
 
@@ -813,63 +974,22 @@ class IslandView: NSView, NSTextFieldDelegate {
     }
 
     private func renderAssistantGlassCard(in rect: NSRect) {
-        let padX = rect.minX + 20
-        let curY = rect.minY + 16
+        let padX = rect.minX + 24
+        let statusY = rect.minY + 24
         let dark = isDarkMode
-        let secText = dark ? NSColor(white: 0.65, alpha: 1.0) : NSColor(calibratedWhite: 0.38, alpha: 1.0)
 
-        // 1. Top Header Row: Sparkles Icon + Title + Status Badge
-        drawGlassHeader(iconName: "sparkles", title: "Speed-X Assistant", at: CGPoint(x: padX, y: curY))
-
-        // Badge pill on right
-        let badgeRect = NSRect(x: rect.maxX - 88, y: curY + 1, width: 68, height: 18)
-        let badgePath = NSBezierPath(roundedRect: badgeRect, xRadius: 9, yRadius: 9)
-        let badgeFill = dark ? NSColor(white: 1.0, alpha: 0.10) : NSColor(white: 1.0, alpha: 0.35)
-        badgeFill.setFill()
-        badgePath.fill()
-        let badgeStroke = dark ? NSColor(white: 1.0, alpha: 0.15) : NSColor(white: 1.0, alpha: 0.55)
-        badgeStroke.setStroke()
-        badgePath.lineWidth = 0.8
-        badgePath.stroke()
-        drawText("EN • SW", at: CGPoint(x: badgeRect.minX + 13, y: badgeRect.minY + 3), font: .boldSystemFont(ofSize: 9), color: secText)
-
-        // 2. Thinking Orb Dedicated Hero Stage Pedestal (BELOW THE TEXT OF SPEED-X ASSISTANT)
-        let orbCenterY: CGFloat = rect.minY + 71
-        let orbCenterX = rect.minX + (popoverWidth / 2)
-
-        // Concentric ambient halo pedestal behind orb
-        let haloRadius: CGFloat = 34.0
-        if let cgCtx = NSGraphicsContext.current?.cgContext {
-            cgCtx.saveGState()
-            let haloColors = [
-                (dark ? NSColor(red: 0, green: 229/255, blue: 255/255, alpha: 0.15) : NSColor(red: 0, green: 122/255, blue: 255/255, alpha: 0.12)).cgColor,
-                NSColor.clear.cgColor
-            ] as CFArray
-            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: haloColors, locations: [0.0, 1.0]) {
-                cgCtx.drawRadialGradient(gradient, startCenter: CGPoint(x: orbCenterX, y: orbCenterY), startRadius: 8, endCenter: CGPoint(x: orbCenterX, y: orbCenterY), endRadius: haloRadius, options: .drawsAfterEndLocation)
-            }
-            cgCtx.restoreGState()
-        }
-
-        // Concentric specular ring
-        let ringPath = NSBezierPath(ovalIn: NSRect(x: orbCenterX - 30, y: orbCenterY - 30, width: 60, height: 60))
-        let ringColor = dark ? NSColor(white: 1.0, alpha: 0.12) : NSColor(white: 1.0, alpha: 0.35)
-        ringColor.setStroke()
-        ringPath.lineWidth = 0.8
-        ringPath.stroke()
-
-        // 3. Status Line at the bottom of the card (y: rect.minY + 252)
+        // Subtle status message when engine is executing or responding
         if voiceGlowView?.isProcessing == true {
             let workingColor = dark ? NSColor(calibratedRed: 0, green: 229/255, blue: 255/255, alpha: 1.0)
                                     : NSColor(calibratedRed: 0, green: 122/255, blue: 255/255, alpha: 1.0)
             if let img = NSImage(systemSymbolName: "sparkles", accessibilityDescription: nil) {
-                let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold).applying(.init(paletteColors: [workingColor]))
+                let config = NSImage.SymbolConfiguration(pointSize: 10, weight: .semibold).applying(.init(paletteColors: [workingColor]))
                 if let configured = img.withSymbolConfiguration(config) {
-                    let iconRect = NSRect(x: padX + 4, y: rect.minY + 252, width: 14, height: 14)
+                    let iconRect = NSRect(x: padX, y: statusY, width: 13, height: 13)
                     configured.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1.0)
                 }
             }
-            drawText("Speed-X Engine Working...", at: CGPoint(x: padX + 24, y: rect.minY + 252), font: .boldSystemFont(ofSize: 10), color: workingColor)
+            drawText("Speed-X Processing...", at: CGPoint(x: padX + 20, y: statusY), font: .boldSystemFont(ofSize: 10), color: workingColor)
         } else if let last = SpeedXRunner.shared.lastResponse {
             let iconSymbol = last.success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
             let statusColor = last.success
@@ -877,24 +997,13 @@ class IslandView: NSView, NSTextFieldDelegate {
                 : (dark ? NSColor(calibratedRed: 251/255, green: 191/255, blue: 36/255, alpha: 1.0) : NSColor(calibratedRed: 217/255, green: 119/255, blue: 6/255, alpha: 1.0))
 
             if let img = NSImage(systemSymbolName: iconSymbol, accessibilityDescription: nil) {
-                let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold).applying(.init(paletteColors: [statusColor]))
+                let config = NSImage.SymbolConfiguration(pointSize: 10, weight: .semibold).applying(.init(paletteColors: [statusColor]))
                 if let configured = img.withSymbolConfiguration(config) {
-                    let iconRect = NSRect(x: padX + 4, y: rect.minY + 252, width: 14, height: 14)
+                    let iconRect = NSRect(x: padX, y: statusY, width: 13, height: 13)
                     configured.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1.0)
                 }
             }
-            drawText(last.message, at: CGPoint(x: padX + 24, y: rect.minY + 252), font: .systemFont(ofSize: 10), color: statusColor)
-        } else {
-            // Idle ready
-            let readyColor = dark ? NSColor(calibratedRed: 74/255, green: 222/255, blue: 128/255, alpha: 1.0) : NSColor(calibratedRed: 22/255, green: 135/255, blue: 60/255, alpha: 1.0)
-            if let img = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil) {
-                let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold).applying(.init(paletteColors: [readyColor]))
-                if let configured = img.withSymbolConfiguration(config) {
-                    let iconRect = NSRect(x: padX + 4, y: rect.minY + 252, width: 14, height: 14)
-                    configured.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1.0)
-                }
-            }
-            drawText("Speed-X Engine Ready · 100% Offline", at: CGPoint(x: padX + 24, y: rect.minY + 252), font: .systemFont(ofSize: 10), color: secText)
+            drawText(last.message, at: CGPoint(x: padX + 20, y: statusY), font: .systemFont(ofSize: 10), color: statusColor)
         }
     }
 
