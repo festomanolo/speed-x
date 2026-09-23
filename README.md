@@ -13,7 +13,8 @@
 ## Highlights
 
 - **Dynamic Island Glass Dock**: Hugs the physical right bezel of the macOS display with a 25% opacity specular glass surface, responsive Control Center gauges (CoreML confidence, RAM, Assistant readiness), and interactive popovers.
-- **VoiceBeam Audio Spectrometer**: Direct native Swift implementation of [`Libraries.dev voice-glow`](https://libraries.dev/voice.html). Features 7 blooming chromatic lobes (`#FF4678`, `#3CBEFF`, `#AF46FF`, `#3CDE82`, `#FF9628`, `#5A64FF`, `#28C8BE`), harmonic alternating audio-reactive spectro waves, and a traveling sweep beam during active AI processing.
+- **VoiceBeam Sound-Reactive Aurora Stage**: High-fidelity native Swift implementation with real-time vocal luminescence blooming and organic exponential decay. Emanates from the bottom curved contour of the assistant card with an emerald/jade hero pillar, cyan floor flare, deep plum/magenta atmospheric clouds, and a multi-stop chromatic refraction rim that dynamically breathes at rest and flares intensely with live speech volume.
+- **Conversational Assistant Stage**: Floating dark glass card (cornerRadius = 22) featuring spacious prompt typography, generous vertical breathing room, and a floating frosted glass control bar (`Agent (auto) ⌵`, circular microphone, and circular close buttons) floating seamlessly over the aurora stage.
 - **ThinkingOrb Engine**: Native 60 FPS Core Graphics port of [`Libraries.dev thinking-orbs`](https://libraries.dev/orbs.html) with 9 mathematical states (`working`, `searching`, `solving`, `listening`, `connecting`, `weaving`, `composing`, `breathing`, `shaping`).
 - **Comprehensive Desktop Command System**:
   - **Apple Notes**: "open notes app and write a new note", "update the existing one", "andika note mpya".
