@@ -27,10 +27,13 @@ class LayaBrain:
         self.model_dir = model_dir or DEFAULT_MODEL_DIR
         self.compute_units = compute_units or DEFAULT_COMPUTE_UNITS
         self.agent = None
-        self._load_agent()
+        self._attempted_load = False
 
     def _load_agent(self):
         """Safely attempt to load Core ML model with fallback."""
+        if self._attempted_load:
+            return
+        self._attempted_load = True
         weight_file = self.model_dir / "model.mlpackage" / "Data" / "com.apple.CoreML" / "weights" / "weight.bin"
         if not weight_file.exists() or weight_file.stat().st_size < 100_000_000:
             # Model weights not fully downloaded yet; use fast heuristic mode
@@ -99,6 +102,46 @@ class LayaBrain:
         if re.search(r"\b(start research|anza utafiti|research workspace)\b", t):
             return IntentDecision("workspaces", "activate", {"workspace": "research"}, 0.95, False, "heuristic")
 
+        # --- NOTES ---
+        # "open notes app and write a new note", "write a new note", "create note", "update the existing one", "andika note"
+        if re.search(r"\b(open notes app and write a new note|open notes and write a new note|write a new note|write new note|create new note|create a new note|make a new note|andika note mpya|andika note|fungua notes uandike)\b", t):
+            # Extract content if provided
+            body = re.sub(r".*(write a new note|write new note|create new note|create a new note|andika note mpya|andika note)\s*", "", text, flags=re.IGNORECASE).strip()
+            title = "Speed-X Note"
+            if body and len(body.split()) <= 4:
+                title = body
+            params = {"title": title, "body": body if body else "Created with Speed-X Assistant."}
+            return IntentDecision("notes", "create", params, 0.96, False, "heuristic")
+
+        if re.search(r"\b(update the existing one|update existing note|update the existing note|update note|append to note|ongeza kwenye note|ongeza note|rekebisha note)\b", t):
+            addition = re.sub(r".*(update the existing one|update existing note|update note|ongeza kwenye note|ongeza note)\s*", "", text, flags=re.IGNORECASE).strip()
+            params = {"addition": addition if addition else "Updated via Speed-X."}
+            return IntentDecision("notes", "update", params, 0.96, False, "heuristic")
+
+        # --- EMAIL / MAIL ---
+        # "send email with a message", "send an email with a message", "send email", "compose email", "tuma email"
+        if re.search(r"\b(send email with a message|send an email with a message|send email|send an email|compose email|tuma email|tuma barua pepe)\b", t):
+            # Parse possible recipient or message
+            msg = re.sub(r".*(send email with a message|send an email with a message|send email|compose email|tuma email)\s*", "", text, flags=re.IGNORECASE).strip()
+            recipient = ""
+            to_match = re.search(r"\bto\s+([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)\b", text, re.IGNORECASE)
+            if to_match:
+                recipient = to_match.group(1)
+                msg = msg.replace(to_match.group(0), "").strip()
+            params = {
+                "recipient": recipient,
+                "subject": "Speed-X Quick Message",
+                "message": msg if msg else "Hello from Speed-X Assistant!",
+            }
+            return IntentDecision("mail", "send", params, 0.95, False, "heuristic")
+
+        # --- MAKE NEW FILE ---
+        # "make new file", "create new file", "make a new file", "tengeneza faili", "unda faili"
+        if re.search(r"\b(make new file|create new file|make a new file|create a file|make file|new file|tengeneza faili|unda faili|faili jipya)\b", t):
+            name_match = re.search(r"\b(named|called|jina|file)\s+([a-zA-Z0-9_.-]+)", t)
+            filename = name_match.group(2) if name_match else "SpeedX_Document.txt"
+            return IntentDecision("files", "create", {"filename": filename}, 0.95, False, "heuristic")
+
         # --- APPS ---
         # Swahili: "fungua <app>", "washa <app>"
         # English: "open <app>", "launch <app>", "quit <app>", "close <app>"
@@ -156,7 +199,10 @@ class LayaBrain:
         if fast_result:
             return fast_result
 
-        # 2. If Core ML agent is loaded, predict typed decisions
+        # 2. If needed, attempt to load Core ML agent for open-ended queries
+        if self.agent is None and not self._attempted_load:
+            self._load_agent()
+
         if self.agent is not None:
             try:
                 res = self.agent.predict(
