@@ -15,16 +15,8 @@ typealias LayaResponse = SpeedXResponse
 class SpeedXRunner {
     static let shared = SpeedXRunner()
 
-    var lastCommand: String = "ongeza sauti"
-    var lastResponse: SpeedXResponse? = SpeedXResponse(
-        success: true,
-        message: "Speed-X Engine Ready",
-        domain: "system",
-        action: "ready",
-        confidence: 0.94,
-        latency_ms: 190.0,
-        source: "coreml"
-    )
+    var lastCommand: String = ""
+    var lastResponse: SpeedXResponse? = nil
     var isRunning: Bool = false
 
     private let pythonPath = "/Volumes/MacX/speed-x/.venv/bin/python"
