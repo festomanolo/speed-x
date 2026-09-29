@@ -12,14 +12,6 @@ class NotesTool(BaseTool):
     description = "Create, view, and update notes in native Apple Notes."
     supported_actions = ["create", "update", "open"]
 
-    def _run_applescript(self, script: str) -> str:
-        res = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return res.stdout.strip()
 
     def execute(self, action: str, params: Optional[Dict[str, Any]] = None) -> ToolResult:
         params = params or {}

@@ -6,7 +6,7 @@ cd "$DIR"
 
 echo "🔨 [1/4] Compiling Speed-X Swift UI Sources..."
 mkdir -p bin dist
-swiftc -O swift_ui/Sources/*.swift -o bin/SpeedX
+swiftc -O -target "$(uname -m)-apple-macos26.0" swift_ui/Sources/*.swift -o bin/SpeedX
 
 echo "📦 [2/4] Assembling SpeedX.app Bundle..."
 APP_BUNDLE="dist/SpeedX.app"
@@ -37,7 +37,20 @@ cat << 'EOF' > "$APP_BUNDLE/Contents/Info.plist"
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
+    <string>26.0</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.festomanolo.speedx</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>speedx</string>
+            </array>
+        </dict>
+    </array>
+    <key>SpeedXProjectRoot</key>
+    <string>__PROJECT_ROOT__</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSHighResolutionCapable</key>
@@ -46,11 +59,22 @@ cat << 'EOF' > "$APP_BUNDLE/Contents/Info.plist"
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Speed-X uses the microphone for offline voice commands.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Speed-X controls apps like Music, Notes, Mail and Reminders when you ask it to.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>Speed-X uses Speech Recognition to convert spoken English and Swahili commands to text.</string>
 </dict>
 </plist>
 EOF
+sed -i '' "s#__PROJECT_ROOT__#$DIR#" "$APP_BUNDLE/Contents/Info.plist"
+
+# Ad-hoc signature with an identifier-based designated requirement. macOS only shows the
+# microphone / speech / automation prompts for a signed bundle, and pinning the requirement
+# to the bundle id (instead of the default per-build code hash) means granted permissions
+# survive rebuilds.
+codesign --force --deep --sign - \
+    --requirements '=designated => identifier "com.festomanolo.speedx"' \
+    "$APP_BUNDLE"
 
 echo "💿 [3/4] Preparing DMG staging area..."
 DMG_STAGING="dist/dmg_staging"

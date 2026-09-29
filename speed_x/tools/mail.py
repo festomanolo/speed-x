@@ -12,15 +12,6 @@ class MailTool(BaseTool):
     description = "Compose and send emails via native Apple Mail."
     supported_actions = ["send", "compose", "open"]
 
-    def _run_applescript(self, script: str, timeout: float = 4.0) -> str:
-        res = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=timeout,
-        )
-        return res.stdout.strip()
 
     def execute(self, action: str, params: Optional[Dict[str, Any]] = None) -> ToolResult:
         params = params or {}

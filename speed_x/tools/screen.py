@@ -72,6 +72,26 @@ class ScreenTool(BaseTool):
                     if os.path.exists(tmp_path):
                         os.unlink(tmp_path)
 
+            elif action == "active_window":
+                from ..core.context import context_engine
+
+                app = context_engine.get_frontmost_app()
+                script = (
+                    'tell application "System Events"\n'
+                    "    try\n"
+                    "        return name of front window of (first application process whose frontmost is true)\n"
+                    "    on error\n"
+                    '        return ""\n'
+                    "    end try\n"
+                    "end tell"
+                )
+                try:
+                    title = self._run_applescript(script).strip()
+                except Exception:
+                    title = ""  # no Accessibility access: the app name alone still answers the question
+                message = f"You're in {app}" + (f", window “{title}”." if title else ".")
+                return ToolResult(success=True, message=message, data={"app": app, "window": title or None})
+
             else:
                 return ToolResult(success=False, message=f"Unknown screen action: '{action}'.")
 
