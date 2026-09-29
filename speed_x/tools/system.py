@@ -20,14 +20,6 @@ class SystemTool(BaseTool):
         "toggle_dark_mode",
     ]
 
-    def _run_applescript(self, script: str) -> str:
-        res = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return res.stdout.strip()
 
     def execute(self, action: str, params: Optional[Dict[str, Any]] = None) -> ToolResult:
         params = params or {}
@@ -61,11 +53,15 @@ class SystemTool(BaseTool):
                 return ToolResult(success=True, message="Audio unmuted.")
 
             elif action == "lock_screen":
-                # Instant lock screen using macOS Sacm shortcut / CGSession
-                subprocess.run(
-                    ["pmset", "displaysleepnow"],
-                    check=False,
-                )
+                # SACLockScreenImmediate is what the menu-bar "Lock Screen" item calls;
+                # `pmset displaysleepnow` only blanks the display.
+                try:
+                    import ctypes
+
+                    login = ctypes.CDLL("/System/Library/PrivateFrameworks/login.framework/Versions/Current/login")
+                    login.SACLockScreenImmediate()
+                except Exception:
+                    subprocess.run(["pmset", "displaysleepnow"], check=False)
                 return ToolResult(success=True, message="Screen locked.")
 
             elif action == "sleep":
@@ -73,11 +69,14 @@ class SystemTool(BaseTool):
                 return ToolResult(success=True, message="Mac put to sleep.")
 
             elif action == "toggle_dark_mode":
+                mode = params.get("mode", "")
+                target = {"dark": "true", "light": "false"}.get(mode, "not dark mode")
                 self._run_applescript(
                     'tell application "System Events" to tell appearance preferences '
-                    "to set dark mode to not dark mode"
+                    f"to set dark mode to {target}"
                 )
-                return ToolResult(success=True, message="Toggled dark mode.")
+                label = {"dark": "Dark mode on.", "light": "Light mode on."}.get(mode, "Toggled dark mode.")
+                return ToolResult(success=True, message=label)
 
             else:
                 return ToolResult(

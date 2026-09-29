@@ -55,6 +55,16 @@ class MemoryManager:
     def list_workspaces(self) -> List[str]:
         return list(self._data.get("workspaces", {}).keys())
 
+    def save_workspace(self, name: str, apps: List[str], description: str = ""):
+        self._data.setdefault("workspaces", {})[name] = {"description": description, "apps": apps}
+        self.save()
+
+    def delete_workspace(self, name: str) -> bool:
+        removed = self._data.get("workspaces", {}).pop(name, None) is not None
+        if removed:
+            self.save()
+        return removed
+
     def log_command(self, command: str, domain: str, action: str, success: bool):
         entry = {
             "command": command,

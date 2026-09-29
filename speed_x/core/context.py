@@ -4,6 +4,8 @@ import subprocess
 from dataclasses import dataclass
 from typing import Optional
 
+_SELF_NAMES = {"SpeedX", "Speed-X", "Python", "python3"}
+
 
 @dataclass
 class SystemContext:
@@ -14,23 +16,24 @@ class SystemContext:
 class ContextEngine:
     """Reads real-time state from macOS to resolve contextual references ('this', 'current')."""
 
-    @staticmethod
-    def get_frontmost_app() -> str:
-        script = (
-            'tell application "System Events"\n'
-            '    return name of first application process whose frontmost is true\n'
-            "end tell"
-        )
+    def __init__(self):
+        # The UI reports the app the user was in before summoning Speed-X, because by the
+        # time a command arrives Speed-X itself is usually frontmost.
+        self.front_app_hint: Optional[str] = None
+
+    def get_frontmost_app(self) -> str:
+        if self.front_app_hint and self.front_app_hint not in _SELF_NAMES:
+            return self.front_app_hint
         try:
-            res = subprocess.run(
-                ["osascript", "-e", script],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            return res.stdout.strip()
+            from AppKit import NSWorkspace
+
+            app = NSWorkspace.sharedWorkspace().frontmostApplication()
+            name = str(app.localizedName()) if app else ""
+            if name and name not in _SELF_NAMES:
+                return name
         except Exception:
-            return "Finder"
+            pass
+        return "Finder"
 
     @staticmethod
     def get_active_window_title() -> Optional[str]:
@@ -45,12 +48,7 @@ class ContextEngine:
             "end tell"
         )
         try:
-            res = subprocess.run(
-                ["osascript", "-e", script],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
+            res = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, check=True)
             val = res.stdout.strip()
             return val if val else None
         except Exception:

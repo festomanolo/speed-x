@@ -28,6 +28,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+cloud = ["anthropic>=1.9"]
 convert = ["torch==2.7.0", "safetensors>=0.6"]
 dev = ["pytest>=8", "ruff>=0.12", "build>=1", "psutil>=6"]
 compare = ["laya-mlx==0.2.0"]

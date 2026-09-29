@@ -1,187 +1,298 @@
+import AVFoundation
+import AudioToolbox
 import Foundation
 import Speech
-import AVFoundation
 
-class SpeechManager: NSObject, SFSpeechRecognizerDelegate {
+/// Streams the selected microphone (AirPods first, see AudioDevices) into on-device
+/// speech recognition and decides when the user has finished speaking.
+///
+/// Endpointing: once speech has been heard, the command is committed after
+/// `silenceWindow` seconds without new words *and* with a quiet mic. That is ~3x faster
+/// than the previous fixed 2.2s timer while not cutting people off mid-sentence.
+final class SpeechManager: NSObject {
     static let shared = SpeechManager()
 
-    private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
-    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
-    private var recognitionTask: SFSpeechRecognitionTask?
-    private let audioEngine = AVAudioEngine()
+    enum StopReason { case endOfSpeech, manual, cancelled, error(String) }
 
-    private(set) var isRecording: Bool = false
-    private var silenceTimer: Timer?
-
-    var onSpeechPartial: ((String) -> Void)?
-    var onSpeechFinished: ((String) -> Void)?
+    // Callbacks (always delivered on the main thread)
+    var onPartial: ((String) -> Void)?
+    var onFinal: ((String) -> Void)?
     var onStateChange: ((Bool) -> Void)?
-    var onAudioLevel: ((Float) -> Void)?
-    private(set) var currentAudioLevel: Float = 0.0
+    var onLevel: ((Float) -> Void)?
+    var onError: ((String) -> Void)?
 
-    override init() {
-        super.init()
-        speechRecognizer?.delegate = self
-    }
+    private(set) var isRecording = false
+    private(set) var activeDeviceName: String?
+
+    /// Seconds of silence after speech that ends the command.
+    var silenceWindow: TimeInterval = 0.8
+    private let noSpeechTimeout: TimeInterval = 7.0
+    private let maxDuration: TimeInterval = 20.0
+
+    private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    private var engine: AVAudioEngine?
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+    private var task: SFSpeechRecognitionTask?
+    private var endpointTimer: Timer?
+    private var configObserver: NSObjectProtocol?
+
+    private var transcript = ""
+    private var lastPartialAt = Date.distantPast
+    private var startedAt = Date()
+    private var heardSpeech = false
+    private var recentLevel: Float = 0
+    private var peakRMS: Float = 0
+    private var delivered = false
+    private var lastToggle = Date.distantPast
+    private var isWarming = false
+    private var lastWarm = Date.distantPast
+    private var warmTask: SFSpeechRecognitionTask?
+
+    /// Vocabulary hints: app names, bilingual command words.
+    var contextualStrings: [String] = [
+        "Speed X", "Safari", "Spotify", "WhatsApp", "Visual Studio Code", "Xcode", "Telegram", "YouTube", "GitHub",
+        "cheza muziki", "simamisha", "ongeza sauti", "punguza sauti", "nyamazisha", "fungua", "funga kioo",
+        "andika note", "tuma email", "tafuta", "nikumbushe", "saa ngapi", "dakika", "weka timer", "anza coding",
+        "volume up", "volume down", "set a timer", "remind me", "take a screenshot", "read my screen", "clipboard",
+    ]
 
     func requestPermissions(completion: @escaping (Bool) -> Void) {
-        SFSpeechRecognizer.requestAuthorization { authStatus in
-            AVCaptureDevice.requestAccess(for: .audio) { micGranted in
-                DispatchQueue.main.async {
-                    let speechGranted = (authStatus == .authorized)
-                    completion(speechGranted && micGranted)
-                }
+        SFSpeechRecognizer.requestAuthorization { status in
+            AVCaptureDevice.requestAccess(for: .audio) { mic in
+                DispatchQueue.main.async { completion(status == .authorized && mic) }
             }
         }
     }
 
-    private var lastToggleTime: Date = Date.distantPast
-
-    func toggleRecording() {
-        let now = Date()
-        guard now.timeIntervalSince(lastToggleTime) > 0.4 else { return }
-        lastToggleTime = now
-
-        if isRecording {
-            stopRecording(shouldExecute: true)
-        } else {
-            startRecording()
+    /// The on-device model takes 5-13s to load on Intel Macs. Feeding it half a second of
+    /// silence at launch (and when the assistant opens) keeps the first real command instant.
+    func prewarm() {
+        guard !isRecording, !isWarming,
+              SFSpeechRecognizer.authorizationStatus() == .authorized,
+              let recognizer, recognizer.isAvailable,
+              Date().timeIntervalSince(lastWarm) > 120,
+              let format = AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 8_000) else { return }
+        isWarming = true
+        buffer.frameLength = 8_000 // zero-filled = silence
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        if recognizer.supportsOnDeviceRecognition { request.requiresOnDeviceRecognition = true }
+        request.contextualStrings = contextualStrings
+        request.append(buffer)
+        request.endAudio()
+        warmTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            guard result?.isFinal == true || error != nil else { return }
+            DispatchQueue.main.async {
+                self?.isWarming = false
+                self?.lastWarm = Date()
+                self?.warmTask = nil
+            }
         }
     }
 
-    func startRecording() {
+    func toggle() {
+        guard Date().timeIntervalSince(lastToggle) > 0.3 else { return }
+        lastToggle = Date()
+        if isRecording { stop(.manual) } else { start() }
+    }
+
+    // MARK: - Start
+
+    func start() {
         guard !isRecording else { return }
-
-        if SFSpeechRecognizer.authorizationStatus() != .authorized {
-            SFSpeechRecognizer.requestAuthorization { [weak self] status in
-                if status == .authorized {
-                    DispatchQueue.main.async {
-                        self?.startRecording()
-                    }
-                }
-            }
+        switch SFSpeechRecognizer.authorizationStatus() {
+        case .authorized: break
+        case .notDetermined:
+            requestPermissions { [weak self] ok in if ok { self?.start() } }
+            return
+        default:
+            fail("Speech recognition is off. Enable Speed-X in System Settings › Privacy & Security › Speech Recognition.")
+            return
+        }
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: break
+        case .notDetermined:
+            requestPermissions { [weak self] ok in if ok { self?.start() } }
+            return
+        default:
+            fail("Microphone access is off. Enable Speed-X in System Settings › Privacy & Security › Microphone.")
+            return
+        }
+        guard let recognizer, recognizer.isAvailable else {
+            fail("Speech recognizer is unavailable right now.")
             return
         }
 
-        // Cancel any lingering tasks
-        recognitionTask?.cancel()
-        recognitionTask = nil
+        let engine = AVAudioEngine()
+        let input = engine.inputNode
 
-        let inputNode = audioEngine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        // Route the engine to the chosen device (AirPods) instead of the broken built-in mic.
+        let device = AudioDevices.shared.selectedDevice()
+        if let device, let unit = input.audioUnit {
+            var id = device.id
+            let status = AudioUnitSetProperty(
+                unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+                &id, UInt32(MemoryLayout<AudioDeviceID>.size)
+            )
+            if status != noErr { print("SpeechManager: couldn't select \(device.name) (\(status))") }
+        }
+        activeDeviceName = device?.name
 
-        // Make sure audio format is valid
-        guard recordingFormat.sampleRate > 0 else {
-            print("SpeechManager: Invalid microphone format")
+        let format = input.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            fail("No usable microphone. Connect your AirPods or choose an input in System ▸ Microphone.")
             return
         }
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
+        request.taskHint = .search
+        request.addsPunctuation = false
+        request.contextualStrings = contextualStrings
+        if recognizer.supportsOnDeviceRecognition { request.requiresOnDeviceRecognition = true }
 
-        // Enforce on-device recognition if supported for 100% offline privacy
-        if let recognizer = speechRecognizer, recognizer.supportsOnDeviceRecognition {
-            request.requiresOnDeviceRecognition = true
+        transcript = ""
+        heardSpeech = false
+        delivered = false
+        peakRMS = 0
+        recentLevel = 0
+        startedAt = Date()
+        lastPartialAt = Date()
+
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self, weak request] buffer, _ in
+            request?.append(buffer)
+            self?.measure(buffer)
         }
 
-        self.recognitionRequest = request
-
-        recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
-            guard let self = self else { return }
-
-            if let result = result {
-                let text = result.bestTranscription.formattedString
-                DispatchQueue.main.async {
-                    self.onSpeechPartial?(text)
-                }
-
-                // Reset silence timer on every new speech piece
-                self.resetSilenceTimer(text: text)
-
-                if result.isFinal {
-                    self.stopRecording(shouldExecute: true)
-                }
-            }
-
-            if error != nil {
-                self.stopRecording(shouldExecute: false)
-            }
-        }
-
-        inputNode.removeTap(onBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-            guard let self = self else { return }
-            self.recognitionRequest?.append(buffer)
-
-            // Live audio power computation for Gemini Live spectrometer
-            if let channelData = buffer.floatChannelData?[0] {
-                let frames = Int(buffer.frameLength)
-                var sum: Float = 0
-                let strideStep = 4
-                var count = 0
-                for i in stride(from: 0, to: frames, by: strideStep) {
-                    let s = channelData[i]
-                    sum += s * s
-                    count += 1
-                }
-                let rms = sqrt(sum / Float(max(1, count)))
-                let db = 20 * log10(max(rms, 0.0001))
-                // Scale voice decibels (-45 dB to -5 dB) into 0.0 ... 1.0
-                let normalized = max(0.0, min(1.0, (db + 45.0) / 40.0))
-                DispatchQueue.main.async {
-                    self.currentAudioLevel = normalized
-                    self.onAudioLevel?(normalized)
-                }
-            }
-        }
-
-        audioEngine.prepare()
         do {
-            try audioEngine.start()
-            isRecording = true
-            DispatchQueue.main.async {
-                self.onStateChange?(true)
-            }
+            engine.prepare()
+            try engine.start()
         } catch {
-            print("SpeechManager: AudioEngine start failed:", error)
-            DispatchQueue.main.async {
-                self.stopRecording(shouldExecute: false)
-            }
+            input.removeTap(onBus: 0)
+            fail("Microphone failed to start: \(error.localizedDescription)")
+            return
         }
+
+        self.engine = engine
+        self.request = request
+        self.task = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            DispatchQueue.main.async { self?.handle(result: result, error: error) }
+        }
+
+        // AirPods connecting/disconnecting mid-command reconfigures the engine: commit what we have.
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+        ) { [weak self] _ in
+            self?.stop(.endOfSpeech)
+        }
+
+        isRecording = true
+        onStateChange?(true)
+        endpointTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in self?.tick() }
+        RunLoop.main.add(endpointTimer!, forMode: .common)
     }
 
-    func stopRecording(shouldExecute: Bool) {
-        guard isRecording else { return }
+    // MARK: - Audio metering
 
-        silenceTimer?.invalidate()
-        silenceTimer = nil
-
-        audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
-        recognitionRequest?.endAudio()
-
-        let finalText = recognitionTask?.error == nil ? (recognitionRequest != nil ? "" : "") : ""
-
-        recognitionRequest = nil
-        recognitionTask = nil
-        isRecording = false
-        currentAudioLevel = 0.0
-
+    private func measure(_ buffer: AVAudioPCMBuffer) {
+        guard let channel = buffer.floatChannelData?[0] else { return }
+        let frames = Int(buffer.frameLength)
+        guard frames > 0 else { return }
+        var sum: Float = 0
+        var i = 0
+        while i < frames { let s = channel[i]; sum += s * s; i += 2 }
+        let rms = sqrt(sum / Float(max(1, frames / 2)))
+        let db = 20 * log10(max(rms, 0.000_01))
+        let level = max(0, min(1, (db + 50) / 42))
         DispatchQueue.main.async { [weak self] in
-            self?.onAudioLevel?(0.0)
-            self?.onStateChange?(false)
-            if shouldExecute {
-                self?.onSpeechFinished?(finalText)
-            }
+            guard let self else { return }
+            self.peakRMS = max(self.peakRMS, rms)
+            self.recentLevel = self.recentLevel * 0.6 + level * 0.4
+            self.onLevel?(level)
         }
     }
 
-    private func resetSilenceTimer(text: String) {
-        silenceTimer?.invalidate()
-        // If user pauses speaking for 2.2 seconds, automatically conclude recording and dispatch
-        silenceTimer = Timer.scheduledTimer(withTimeInterval: 2.2, repeats: false) { [weak self] _ in
-            guard let self = self, self.isRecording else { return }
-            self.stopRecording(shouldExecute: true)
+    // MARK: - Recognition + endpointing
+
+    private func handle(result: SFSpeechRecognitionResult?, error: Error?) {
+        guard isRecording else { return }
+        if let result {
+            let text = result.bestTranscription.formattedString
+            if !text.isEmpty, text != transcript {
+                transcript = text
+                heardSpeech = true
+                lastPartialAt = Date()
+                onPartial?(text)
+            }
+            if result.isFinal { stop(.endOfSpeech); return }
         }
+        if error != nil {
+            // "No speech detected" arrives as an error; treat as end of speech when we have text.
+            stop(transcript.isEmpty ? .cancelled : .endOfSpeech)
+        }
+    }
+
+    private func tick() {
+        guard isRecording else { return }
+        let now = Date()
+        let elapsed = now.timeIntervalSince(startedAt)
+
+        if heardSpeech {
+            let quietFor = now.timeIntervalSince(lastPartialAt)
+            // Quiet mic ends it quickly; if there's still sound but no new words, give it a bit longer.
+            if (quietFor >= silenceWindow && recentLevel < 0.35) || quietFor >= silenceWindow * 2.2 {
+                stop(.endOfSpeech)
+                return
+            }
+        } else {
+            if elapsed > 1.6 && peakRMS < 0.000_05 {
+                let name = activeDeviceName ?? "the microphone"
+                stop(.error("No audio coming from \(name). Connect your AirPods or pick another input."))
+                return
+            }
+            if elapsed > noSpeechTimeout { stop(.cancelled); return }
+        }
+        if elapsed > maxDuration { stop(.endOfSpeech) }
+    }
+
+    // MARK: - Stop
+
+    func stop(_ reason: StopReason) {
+        guard isRecording else { return }
+        isRecording = false
+        endpointTimer?.invalidate()
+        endpointTimer = nil
+        if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
+        configObserver = nil
+
+        engine?.stop()
+        engine?.inputNode.removeTap(onBus: 0)
+        request?.endAudio()
+        task?.finish()
+        engine = nil
+        request = nil
+        task = nil
+
+        onLevel?(0)
+        onStateChange?(false)
+
+        let text = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch reason {
+        case .endOfSpeech, .manual:
+            if !text.isEmpty, !delivered {
+                delivered = true
+                onFinal?(text)
+            }
+        case .cancelled:
+            break
+        case .error(let message):
+            onError?(message)
+        }
+    }
+
+    func cancel() { stop(.cancelled) }
+
+    private func fail(_ message: String) {
+        DispatchQueue.main.async { self.onError?(message) }
     }
 }

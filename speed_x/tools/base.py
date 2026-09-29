@@ -31,6 +31,12 @@ class BaseTool(ABC):
         """Execute a specific action with optional parameters."""
         pass
 
+    def _run_applescript(self, script: str, timeout: float = 8.0) -> str:
+        """Run AppleScript in-process when possible (see core.osa)."""
+        from ..core.osa import run_applescript
+
+        return run_applescript(script, timeout=timeout)
+
 
 class ToolRegistry:
     """Central registry for discovering and dispatching tools."""
