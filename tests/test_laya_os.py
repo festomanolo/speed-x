@@ -1,12 +1,14 @@
 """Unit tests for Laya OS tools, brain, guardrails, and router."""
 
 import unittest
+from unittest.mock import patch
 
 from laya_os.core.brain import LayaBrain
 from laya_os.core.guardrails import guardrails
 from laya_os.core.router import CommandRouter
 from laya_os.tools.apps import normalize_app_name
 from laya_os.tools.base import registry
+from laya_os.tools.clipboard import ClipboardTool
 
 
 class TestLayaOS(unittest.TestCase):
@@ -110,7 +112,8 @@ class TestLayaOS(unittest.TestCase):
         self.assertTrue(resp.needs_confirmation)
 
         # Non-sensitive command executes directly
-        resp = router.process("inspect clipboard")
+        with patch.object(ClipboardTool, "_read_clipboard", return_value="test clipboard"):
+            resp = router.process("inspect clipboard")
         self.assertTrue(resp.success)
         self.assertEqual(resp.decision.domain, "clipboard")
 
