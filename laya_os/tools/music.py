@@ -72,7 +72,7 @@ class MusicTool(BaseTool):
                 if player == "Spotify":
                     script = (
                         'tell application "Spotify"\n'
-                        '   if player state is playing then\n'
+                        "   if player state is playing then\n"
                         '       return (name of current track) & " by " & (artist of current track)\n'
                         "   else\n"
                         '       return "Paused"\n'
@@ -82,7 +82,7 @@ class MusicTool(BaseTool):
                 else:
                     script = (
                         'tell application "Music"\n'
-                        '   if player state is playing then\n'
+                        "   if player state is playing then\n"
                         '       return (name of current track) & " by " & (artist of current track)\n'
                         "   else\n"
                         '       return "Paused"\n'
@@ -90,7 +90,9 @@ class MusicTool(BaseTool):
                         "end tell"
                     )
                 info = self._run_applescript(script)
-                return ToolResult(success=True, message=f"Now playing: {info}", data={"track": info})
+                return ToolResult(
+                    success=True, message=f"Now playing: {info}", data={"track": info}
+                )
 
             else:
                 return ToolResult(success=False, message=f"Unknown music action: '{action}'.")

@@ -54,18 +54,26 @@ class WebTool(BaseTool):
                     return ToolResult(success=False, message="What should I search for?")
                 url = "https://www.google.com/search?q=" + urllib.parse.quote_plus(query)
                 subprocess.run(["open", url], check=True)
-                return ToolResult(success=True, message=f"Searching the web for “{query}”.", data={"url": url})
+                return ToolResult(
+                    success=True, message=f"Searching the web for “{query}”.", data={"url": url}
+                )
 
             if action == "youtube":
                 query = params.get("query", "").strip()
-                url = "https://www.youtube.com/results?search_query=" + urllib.parse.quote_plus(query)
+                url = "https://www.youtube.com/results?search_query=" + urllib.parse.quote_plus(
+                    query
+                )
                 subprocess.run(["open", url], check=True)
-                return ToolResult(success=True, message=f"Searching YouTube for “{query}”.", data={"url": url})
+                return ToolResult(
+                    success=True, message=f"Searching YouTube for “{query}”.", data={"url": url}
+                )
 
             if action == "open_url":
                 url = params.get("url") or site_url(params.get("site", ""))
                 if not url:
-                    return ToolResult(success=False, message="I couldn't work out which website to open.")
+                    return ToolResult(
+                        success=False, message="I couldn't work out which website to open."
+                    )
                 subprocess.run(["open", url], check=True)
                 host = urllib.parse.urlparse(url).netloc.replace("www.", "")
                 return ToolResult(success=True, message=f"Opened {host}.", data={"url": url})

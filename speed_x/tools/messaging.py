@@ -6,9 +6,7 @@ before anything is sent, so the confirmation shows exactly who will receive it.
 
 import difflib
 import re
-import subprocess
 import time
-import urllib.parse
 from typing import Any, Dict, List, Optional, Tuple
 
 from .apps import app_installed
@@ -17,8 +15,23 @@ from .base import BaseTool, ToolResult, registry
 MESSAGING_APPS = {"WhatsApp", "Messages"}
 
 # Country calling codes for turning local numbers (0712…) into international ones.
-_CALLING_CODES = {"TZ": "255", "KE": "254", "UG": "256", "RW": "250", "BI": "257", "CD": "243", "NG": "234",
-                  "ZA": "27", "GH": "233", "ET": "251", "US": "1", "CA": "1", "GB": "44", "IN": "91", "AE": "971"}
+_CALLING_CODES = {
+    "TZ": "255",
+    "KE": "254",
+    "UG": "256",
+    "RW": "250",
+    "BI": "257",
+    "CD": "243",
+    "NG": "234",
+    "ZA": "27",
+    "GH": "233",
+    "ET": "251",
+    "US": "1",
+    "CA": "1",
+    "GB": "44",
+    "IN": "91",
+    "AE": "971",
+}
 
 
 def _region_code() -> str:
@@ -87,7 +100,9 @@ class MessagingTool(BaseTool):
         self._contacts_cache[key] = (time.time(), people)
         return people
 
-    def resolve_contact(self, spoken: str) -> Tuple[Optional[Tuple[str, List[str], List[str]]], List[str]]:
+    def resolve_contact(
+        self, spoken: str
+    ) -> Tuple[Optional[Tuple[str, List[str], List[str]]], List[str]]:
         """Best contact for a spoken name, plus the other candidate names (for ambiguity)."""
         people = self._search_contacts(spoken)
         if not people:
@@ -193,19 +208,33 @@ class MessagingTool(BaseTool):
         """Open WhatsApp, search the contact by name, open the chat, paste the message, send."""
         if not app_installed("WhatsApp"):
             return ToolResult(success=False, message="WhatsApp isn't installed on this Mac.")
-        esc = lambda v: v.replace("\\", "\\\\").replace('"', '\\"')
-        script = self.WHATSAPP_SCRIPT.replace("__NAME__", esc(who)).replace("__TEXT__", esc(text))
+
+        def escape_applescript(value: str) -> str:
+            return value.replace("\\", "\\\\").replace('"', '\\"')
+
+        script = self.WHATSAPP_SCRIPT.replace("__NAME__", escape_applescript(who)).replace(
+            "__TEXT__", escape_applescript(text)
+        )
         try:
             self._run_applescript(script, timeout=15)
         except Exception as e:
             msg = str(e)
-            if "not allowed" in msg.lower() or "assistive" in msg.lower() or "1002" in msg or "-25211" in msg:
+            if (
+                "not allowed" in msg.lower()
+                or "assistive" in msg.lower()
+                or "1002" in msg
+                or "-25211" in msg
+            ):
                 return ToolResult(
                     success=False,
                     message="To type into WhatsApp, turn on Speed-X in System Settings › Privacy & Security › Accessibility, then ask again.",
                 )
             return ToolResult(success=False, message=f"WhatsApp automation failed: {msg}")
-        return ToolResult(success=True, message=f"Sent “{text}” to {who} on WhatsApp.", data={"contact": who, "app": "WhatsApp"})
+        return ToolResult(
+            success=True,
+            message=f"Sent “{text}” to {who} on WhatsApp.",
+            data={"contact": who, "app": "WhatsApp"},
+        )
 
     # ------------------------------------------------------------------ execution
 
@@ -234,7 +263,11 @@ class MessagingTool(BaseTool):
                 ''',
                 timeout=10,
             )
-            return ToolResult(success=True, message=f"Sent “{text}” to {who} with Messages.", data={"contact": who})
+            return ToolResult(
+                success=True,
+                message=f"Sent “{text}” to {who} with Messages.",
+                data={"contact": who},
+            )
         except Exception as e:
             return ToolResult(success=False, message=f"Couldn't send the message to {who}: {e}")
 

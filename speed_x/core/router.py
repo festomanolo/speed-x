@@ -1,9 +1,8 @@
 """Central Command Router connecting LayaBrain, Guardrails, Memory, and Tools."""
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-
-import re
 
 from ..tools.base import ToolResult, registry
 from . import events
@@ -97,7 +96,9 @@ ACTION_LABELS = {
 
 def describe(decision: IntentDecision) -> str:
     """Short label such as "Open app · Safari" or "Timer · 10 min"."""
-    label = ACTION_LABELS.get((decision.domain, decision.action), f"{decision.domain}.{decision.action}")
+    label = ACTION_LABELS.get(
+        (decision.domain, decision.action), f"{decision.domain}.{decision.action}"
+    )
     p = decision.params
     detail = ""
     if decision.domain == "messaging":
@@ -152,15 +153,25 @@ class CommandRouter:
         if d.action == "ask":
             reply = ai.stream(CHAT_PROMPT, d.params.get("question", d.text), on_delta=push)
             if not reply:
-                return ToolResult(success=False, message="No AI brain is available — open Ollama.app (or add a Claude API key), then ask again.")
+                return ToolResult(
+                    success=False,
+                    message="No AI brain is available — open Ollama.app (or add a Claude API key), then ask again.",
+                )
             return ToolResult(success=True, message=reply)
         if d.action in ("think", "synthesize"):
             content = "\n\n".join(_observation(r) for r in previous) or "(nothing was captured)"
             request = d.params.get("request", d.text)
-            reply = ai.stream(THINK_PROMPT, f"Request: {request}\n\nContent:\n{content[:6000]}", on_delta=push)
+            reply = ai.stream(
+                THINK_PROMPT, f"Request: {request}\n\nContent:\n{content[:6000]}", on_delta=push
+            )
             if not reply:
-                return ToolResult(success=False, message="No AI brain is available — open Ollama.app (or add a Claude API key), then ask again.")
-            if re.search(r"\b(copy|nakili|clipboard)\b", request, re.IGNORECASE) and not re.search(r"\bmy clipboard\b", request, re.IGNORECASE):
+                return ToolResult(
+                    success=False,
+                    message="No AI brain is available — open Ollama.app (or add a Claude API key), then ask again.",
+                )
+            if re.search(r"\b(copy|nakili|clipboard)\b", request, re.IGNORECASE) and not re.search(
+                r"\bmy clipboard\b", request, re.IGNORECASE
+            ):
                 registry.dispatch("clipboard", "write", {"text": reply})
             return ToolResult(success=True, message=reply)
         return ToolResult(success=False, message=f"Unknown assistant action '{d.action}'.")
@@ -191,7 +202,9 @@ class CommandRouter:
                 message = f"Not sure what you meant — did you mean “{suggestion}”?"
             else:
                 message = f"I didn't catch an action in “{first.text or prompt}”. Try music, volume, apps, files, notes, timers or web search."
-            return ExecutionResponse(success=False, message=message, decision=first, suggestion=suggestion)
+            return ExecutionResponse(
+                success=False, message=message, decision=first, suggestion=suggestion
+            )
 
         # 3. Let tools resolve details up front (e.g. "manolo" -> the real contact), so the
         #    confirmation names the actual recipient and impossible steps fail early.
@@ -201,7 +214,12 @@ class CommandRouter:
             if prepare:
                 problem = prepare(d.action, d.params)
                 if problem:
-                    return ExecutionResponse(success=False, message=problem, decision=d, steps=[StepResult(d, False, problem)])
+                    return ExecutionResponse(
+                        success=False,
+                        message=problem,
+                        decision=d,
+                        steps=[StepResult(d, False, problem)],
+                    )
 
         # 4. Guardrails across the whole plan
         if not confirmed:
@@ -209,7 +227,10 @@ class CommandRouter:
             for d in steps:
                 sensitive, reason = guardrails.requires_confirmation(d.domain, d.action)
                 if sensitive or d.requires_confirmation:
-                    reasons.append(f"{reason or describe(d)}" + (f" ({d.params['app']})" if "app" in d.params and reason else ""))
+                    reasons.append(
+                        f"{reason or describe(d)}"
+                        + (f" ({d.params['app']})" if "app" in d.params and reason else "")
+                    )
             if reasons:
                 prompt_msg = f"Confirm: {', '.join(reasons)}?"
                 return ExecutionResponse(
@@ -235,7 +256,9 @@ class CommandRouter:
                 tool_result = self._assistant_step(d, results)
             else:
                 tool_result = registry.dispatch(d.domain, d.action, d.params)
-            results.append(StepResult(d, tool_result.success, tool_result.message, tool_result.data))
+            results.append(
+                StepResult(d, tool_result.success, tool_result.message, tool_result.data)
+            )
             if not tool_result.success and len(steps) > 1:
                 break  # don't run later steps on top of a failed one
 
@@ -252,7 +275,9 @@ class CommandRouter:
         if final:
             message = final[-1].message  # the answer is what the user wants to read
         else:
-            message = results[0].message if len(results) == 1 else " ".join(r.message for r in results)
+            message = (
+                results[0].message if len(results) == 1 else " ".join(r.message for r in results)
+            )
         try:
             from . import ai
 

@@ -23,7 +23,6 @@ class MusicTool(BaseTool):
         "get_current_track",
     ]
 
-
     @staticmethod
     def _quote(text: str) -> str:
         return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
@@ -71,12 +70,24 @@ class MusicTool(BaseTool):
         # Spotify's AppleScript can only play URIs: resolve the song to one via the Web API.
         track = spotify_api.find_track(query, artist)
         if track:
-            self._run_applescript(f'tell application "Spotify" to play track {self._quote(track["uri"])}')
+            self._run_applescript(
+                f'tell application "Spotify" to play track {self._quote(track["uri"])}'
+            )
             found = f"{track['name']} by {track['artist']}"
-            return ToolResult(success=True, message=f"Playing {found} on Spotify.", data={"track": found})
+            return ToolResult(
+                success=True, message=f"Playing {found} on Spotify.", data={"track": found}
+            )
         subprocess.run(["open", "spotify:search:" + urllib.parse.quote(term)], check=False)
-        hint = "" if spotify_api.credentials() else " (add Spotify API keys to play songs directly — see README)"
-        return ToolResult(success=True, message=f"Opened Spotify search for “{wanted}”{hint}.", data={"track": None})
+        hint = (
+            ""
+            if spotify_api.credentials()
+            else " (add Spotify API keys to play songs directly — see README)"
+        )
+        return ToolResult(
+            success=True,
+            message=f"Opened Spotify search for “{wanted}”{hint}.",
+            data={"track": None},
+        )
 
     def _detect_active_player(self) -> str:
         """Pick the running player (Spotify first), without spawning processes."""
@@ -86,7 +97,9 @@ class MusicTool(BaseTool):
         if "Music" in running:
             return "Music"
         preferred = memory.get_preference("music_player", "Music")
-        return preferred if preferred in ("Spotify", "Music") and app_installed(preferred) else "Music"
+        return (
+            preferred if preferred in ("Spotify", "Music") and app_installed(preferred) else "Music"
+        )
 
     def execute(self, action: str, params: Optional[Dict[str, Any]] = None) -> ToolResult:
         params = params or {}
@@ -122,11 +135,13 @@ class MusicTool(BaseTool):
 
             elif action == "get_current_track":
                 if player not in running_app_names():
-                    return ToolResult(success=True, message="Nothing is playing right now.", data={"track": None})
+                    return ToolResult(
+                        success=True, message="Nothing is playing right now.", data={"track": None}
+                    )
                 if player == "Spotify":
                     script = (
                         'tell application "Spotify"\n'
-                        '   if player state is playing then\n'
+                        "   if player state is playing then\n"
                         '       return (name of current track) & " by " & (artist of current track)\n'
                         "   else\n"
                         '       return "Paused"\n'
@@ -136,7 +151,7 @@ class MusicTool(BaseTool):
                 else:
                     script = (
                         'tell application "Music"\n'
-                        '   if player state is playing then\n'
+                        "   if player state is playing then\n"
                         '       return (name of current track) & " by " & (artist of current track)\n'
                         "   else\n"
                         '       return "Paused"\n'
@@ -144,7 +159,9 @@ class MusicTool(BaseTool):
                         "end tell"
                     )
                 info = self._run_applescript(script)
-                return ToolResult(success=True, message=f"Now playing: {info}", data={"track": info})
+                return ToolResult(
+                    success=True, message=f"Now playing: {info}", data={"track": info}
+                )
 
             else:
                 return ToolResult(success=False, message=f"Unknown music action: '{action}'.")

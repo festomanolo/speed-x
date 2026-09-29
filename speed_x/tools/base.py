@@ -53,7 +53,9 @@ class ToolRegistry:
     def list_tools(self) -> Dict[str, List[str]]:
         return {name: tool.supported_actions for name, tool in self._tools.items()}
 
-    def dispatch(self, domain: str, action: str, params: Optional[Dict[str, Any]] = None) -> ToolResult:
+    def dispatch(
+        self, domain: str, action: str, params: Optional[Dict[str, Any]] = None
+    ) -> ToolResult:
         tool = self.get(domain)
         if not tool:
             return ToolResult(

@@ -46,7 +46,10 @@ def _access_token(creds: Tuple[str, str]) -> str:
         req = urllib.request.Request(
             "https://accounts.spotify.com/api/token",
             data=b"grant_type=client_credentials",
-            headers={"Authorization": f"Basic {basic}", "Content-Type": "application/x-www-form-urlencoded"},
+            headers={
+                "Authorization": f"Basic {basic}",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
         )
         with urllib.request.urlopen(req, timeout=TIMEOUT_S) as res:
             body = json.load(res)
@@ -60,9 +63,13 @@ def find_track(query: str, artist: str = "") -> Optional[Dict[str, str]]:
     if not creds:
         return None
     q = f"track:{query} artist:{artist}" if artist else query
-    url = "https://api.spotify.com/v1/search?" + urllib.parse.urlencode({"q": q, "type": "track", "limit": 1})
+    url = "https://api.spotify.com/v1/search?" + urllib.parse.urlencode(
+        {"q": q, "type": "track", "limit": 1}
+    )
     try:
-        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {_access_token(creds)}"})
+        req = urllib.request.Request(
+            url, headers={"Authorization": f"Bearer {_access_token(creds)}"}
+        )
         with urllib.request.urlopen(req, timeout=TIMEOUT_S) as res:
             items = json.load(res).get("tracks", {}).get("items", [])
     except (urllib.error.URLError, OSError, ValueError, KeyError):

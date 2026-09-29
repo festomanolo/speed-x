@@ -80,10 +80,13 @@ TOOL_CATALOG: Dict[str, List[str]] = {
     "workspaces.delete": ["workspace"],
 }
 
-SYSTEM_PROMPT = """You turn a Mac user's request (English, Swahili or Sheng) into actions.
+SYSTEM_PROMPT = (
+    """You turn a Mac user's request (English, Swahili or Sheng) into actions.
 Output ONLY action lines, one per line, in the form:  tool key=value; key=value
 If the user needs an answer rather than an action, output one line:  SAY <short answer>
-Tools: """ + "; ".join(f"{n}({','.join(p)})" if p else n for n, p in TOOL_CATALOG.items()) + """
+Tools: """
+    + "; ".join(f"{n}({','.join(p)})" if p else n for n, p in TOOL_CATALOG.items())
+    + """
 
 Examples:
 make it quiet -> system.mute
@@ -98,6 +101,7 @@ search how to cook pilau -> web.search query=how to cook pilau
 wake me in 20 minutes -> timer.set seconds=1200; label=wake up
 text Juma I'm late on whatsapp -> messaging.send to=Juma; text=I'm late; app=WhatsApp
 set up a design space with figma and safari -> workspaces.create workspace=design; apps=Figma, Safari"""
+)
 
 ANSWER_PROMPT = """You are Speed-X, a concise Mac assistant. Using the tool results below, do what the user asked
 (summarize, explain, translate, extract, answer). Reply in the user's language, plainly, under 90 words.
@@ -157,7 +161,9 @@ class LocalLLM:
 
     def _post(self, path: str, body: Dict[str, Any], timeout: float) -> Dict[str, Any]:
         req = urllib.request.Request(
-            OLLAMA_URL + path, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
+            OLLAMA_URL + path,
+            data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"},
         )
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read())
@@ -172,7 +178,10 @@ class LocalLLM:
         except Exception:
             self.state = "offline"
             return False
-        if not any(n == self.model or n.startswith(self.model + ":") or n.split(":")[0] == self.model for n in names):
+        if not any(
+            n == self.model or n.startswith(self.model + ":") or n.split(":")[0] == self.model
+            for n in names
+        ):
             self.state = "missing"
             return False
         if self.state in ("cold", "offline", "missing"):
@@ -188,9 +197,20 @@ class LocalLLM:
             self.state = "warming"
             try:
                 # Load weights and pre-fill the chat prompt's cache; generate a single token only.
-                self._post("/api/chat", {"model": self.model, "stream": False, "keep_alive": "45m",
-                                         "messages": [{"role": "system", "content": CHAT_PROMPT}, {"role": "user", "content": "hi"}],
-                                         "options": {"num_predict": 1, "num_ctx": NUM_CTX}}, timeout=120)
+                self._post(
+                    "/api/chat",
+                    {
+                        "model": self.model,
+                        "stream": False,
+                        "keep_alive": "45m",
+                        "messages": [
+                            {"role": "system", "content": CHAT_PROMPT},
+                            {"role": "user", "content": "hi"},
+                        ],
+                        "options": {"num_predict": 1, "num_ctx": NUM_CTX},
+                    },
+                    timeout=120,
+                )
                 self.state = "ready"
             except Exception:
                 self.state = "offline"
@@ -243,7 +263,12 @@ class LocalLLM:
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             "stream": False,
             "keep_alive": "45m",
-            "options": {"temperature": 0, "num_predict": max_tokens, "num_ctx": NUM_CTX, "stop": ["\n\n", "->"]},
+            "options": {
+                "temperature": 0,
+                "num_predict": max_tokens,
+                "num_ctx": NUM_CTX,
+                "stop": ["\n\n", "->"],
+            },
         }
         try:
             with self._lock:
@@ -274,7 +299,9 @@ class LocalLLM:
         if not self.available():
             return None
         messages = [{"role": "system", "content": system}]
-        messages.extend(t for t in self.history if t["role"] == "user" or not t["content"].startswith("{"))
+        messages.extend(
+            t for t in self.history if t["role"] == "user" or not t["content"].startswith("{")
+        )
         messages.append({"role": "user", "content": user})
         body = {
             "model": self.model,
@@ -283,7 +310,11 @@ class LocalLLM:
             "keep_alive": "45m",
             "options": {"temperature": 0.4, "num_predict": 260, "num_ctx": NUM_CTX},
         }
-        req = urllib.request.Request(OLLAMA_URL + "/api/chat", data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(
+            OLLAMA_URL + "/api/chat",
+            data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"},
+        )
         text = ""
         last_push = 0.0
         try:

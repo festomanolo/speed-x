@@ -43,7 +43,14 @@ class TestTimerPersistence(unittest.TestCase):
         self.assertEqual(json.loads(self.store.read_text()), [])
 
     def test_timer_missed_while_off_notifies_once(self):
-        self.store.write_text(json.dumps([{"label": "oven", "ends": time.time() - 60}, {"label": "old", "ends": time.time() - 2 * 86400}]))
+        self.store.write_text(
+            json.dumps(
+                [
+                    {"label": "oven", "ends": time.time() - 60},
+                    {"label": "old", "ends": time.time() - 2 * 86400},
+                ]
+            )
+        )
         tool = timer_mod.TimerTool(store=self.store)
         self.assertEqual([t["label"] for t in tool._timers], ["oven"])  # stale one dropped
         tool._timers[0]["handle"].join(3)
@@ -66,7 +73,9 @@ class TestWorkspaces(unittest.TestCase):
         self.tool = ws_mod.WorkspaceTool()
 
     def test_create_add_save_delete(self):
-        res = self.tool.execute("create", {"workspace": "Writing", "apps": "pages, safari and notes"})
+        res = self.tool.execute(
+            "create", {"workspace": "Writing", "apps": "pages, safari and notes"}
+        )
         self.assertTrue(res.success)
         self.assertEqual(memory.get_workspace("writing")["apps"], ["Pages", "Safari", "Notes"])
 
@@ -74,7 +83,9 @@ class TestWorkspaces(unittest.TestCase):
         self.assertEqual(memory.get_workspace("writing")["apps"][-1], "Slack")
 
         self.tool.execute("save_current", {"workspace": "design"})
-        self.assertEqual(memory.get_workspace("design")["apps"], ["Safari", "Figma"])  # Finder left out
+        self.assertEqual(
+            memory.get_workspace("design")["apps"], ["Safari", "Figma"]
+        )  # Finder left out
 
         self.assertTrue(self.tool.execute("delete", {"workspace": "writing"}).success)
         self.assertIsNone(memory.get_workspace("writing"))
@@ -86,10 +97,22 @@ class TestSpotifyLookup(unittest.TestCase):
         from speed_x.tools import music as music_mod
         from speed_x.tools import spotify_api
 
-        responses = iter([
-            {"access_token": "tok", "expires_in": 3600},
-            {"tracks": {"items": [{"uri": "spotify:track:abc", "name": "Nadina", "artists": [{"name": "Mbosso"}]}]}},
-        ])
+        responses = iter(
+            [
+                {"access_token": "tok", "expires_in": 3600},
+                {
+                    "tracks": {
+                        "items": [
+                            {
+                                "uri": "spotify:track:abc",
+                                "name": "Nadina",
+                                "artists": [{"name": "Mbosso"}],
+                            }
+                        ]
+                    }
+                },
+            ]
+        )
 
         class Res:
             def __init__(self, body):
@@ -107,9 +130,13 @@ class TestSpotifyLookup(unittest.TestCase):
         scripts = []
         tool = music_mod.MusicTool()
         tool._run_applescript = lambda s, timeout=8.0: scripts.append(s) or ""
-        with mock.patch.object(spotify_api, "credentials", lambda: ("id", "secret")), \
-                mock.patch.object(spotify_api, "_token", ("", 0.0)), \
-                mock.patch.object(spotify_api.urllib.request, "urlopen", lambda req, timeout: Res(next(responses))):
+        with (
+            mock.patch.object(spotify_api, "credentials", lambda: ("id", "secret")),
+            mock.patch.object(spotify_api, "_token", ("", 0.0)),
+            mock.patch.object(
+                spotify_api.urllib.request, "urlopen", lambda req, timeout: Res(next(responses))
+            ),
+        ):
             res = tool.execute("play_song", {"query": "nadina", "player": "Spotify"})
         self.assertTrue(res.success)
         self.assertEqual(res.message, "Playing Nadina by Mbosso on Spotify.")
@@ -130,10 +157,21 @@ class TestNewRules(unittest.TestCase):
             self.decide("create a workspace called writing with pages and safari"),
             ("workspaces", "create", {"workspace": "writing", "apps": "pages and safari"}),
         )
-        self.assertEqual(self.decide("save my current apps as design")[:2], ("workspaces", "save_current"))
-        self.assertEqual(self.decide("add slack to the coding workspace")[:2], ("workspaces", "add"))
-        self.assertEqual(self.decide("start writing workspace"), ("workspaces", "activate", {"workspace": "writing"}))
-        self.assertTrue(self.brain.plan("delete the writing workspace", allow_llm=False, commit=False)[0].requires_confirmation)
+        self.assertEqual(
+            self.decide("save my current apps as design")[:2], ("workspaces", "save_current")
+        )
+        self.assertEqual(
+            self.decide("add slack to the coding workspace")[:2], ("workspaces", "add")
+        )
+        self.assertEqual(
+            self.decide("start writing workspace"),
+            ("workspaces", "activate", {"workspace": "writing"}),
+        )
+        self.assertTrue(
+            self.brain.plan("delete the writing workspace", allow_llm=False, commit=False)[
+                0
+            ].requires_confirmation
+        )
 
     def test_clipboard_and_window(self):
         self.assertEqual(self.decide("clear my clipboard")[:2], ("clipboard", "clear"))

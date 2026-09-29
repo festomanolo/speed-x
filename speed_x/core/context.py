@@ -48,7 +48,9 @@ class ContextEngine:
             "end tell"
         )
         try:
-            res = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, check=True)
+            res = subprocess.run(
+                ["osascript", "-e", script], capture_output=True, text=True, check=True
+            )
             val = res.stdout.strip()
             return val if val else None
         except Exception:

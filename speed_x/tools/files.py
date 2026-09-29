@@ -42,7 +42,9 @@ class FileTool(BaseTool):
                         message=f"Found {len(matches)} matching file(s).",
                         data={"matches": matches},
                     )
-                return ToolResult(success=True, message=f"No files matching '{name}' found.", data={"matches": []})
+                return ToolResult(
+                    success=True, message=f"No files matching '{name}' found.", data={"matches": []}
+                )
 
             elif action == "find_pdf":
                 query = "kMDItemContentType == 'com.adobe.pdf'"
@@ -78,7 +80,7 @@ class FileTool(BaseTool):
             elif action in ("create", "make_file"):
                 raw_name = params.get("filename") or params.get("name") or "SpeedX_Document.txt"
                 raw_name = raw_name.strip()
-                if not ("." in raw_name):
+                if "." not in raw_name:
                     raw_name += ".txt"
                 folder_str = params.get("folder")
                 if folder_str:
@@ -92,8 +94,11 @@ class FileTool(BaseTool):
                 initial_content = params.get("content")
                 if not initial_content:
                     import datetime
+
                     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    initial_content = f"# {file_path.stem}\nCreated with Speed-X Assistant on {ts}\n"
+                    initial_content = (
+                        f"# {file_path.stem}\nCreated with Speed-X Assistant on {ts}\n"
+                    )
 
                 file_path.write_text(initial_content, encoding="utf-8")
 

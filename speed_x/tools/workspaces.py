@@ -45,7 +45,9 @@ class WorkspaceTool(BaseTool):
             opened = []
             for app in ws.get("apps", []):
                 norm_app = normalize_app_name(app)
-                subprocess.Popen(["open", "-a", norm_app], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(
+                    ["open", "-a", norm_app], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
                 opened.append(norm_app)
 
             return ToolResult(
@@ -56,10 +58,14 @@ class WorkspaceTool(BaseTool):
 
         elif action == "list":
             workspaces = memory.list_workspaces()
-            details = [f"{w} ({', '.join(memory.get_workspace(w).get('apps', []))})" for w in workspaces]
+            details = [
+                f"{w} ({', '.join(memory.get_workspace(w).get('apps', []))})" for w in workspaces
+            ]
             return ToolResult(
                 success=True,
-                message=f"Configured workspaces: {'; '.join(details)}" if details else "No workspaces yet.",
+                message=f"Configured workspaces: {'; '.join(details)}"
+                if details
+                else "No workspaces yet.",
                 data={"workspaces": workspaces},
             )
 
@@ -69,7 +75,9 @@ class WorkspaceTool(BaseTool):
         if action == "create":
             apps = _app_list(params.get("apps"))
             if not apps:
-                return ToolResult(success=False, message=f"Which apps should the '{name}' workspace open?")
+                return ToolResult(
+                    success=False, message=f"Which apps should the '{name}' workspace open?"
+                )
             memory.save_workspace(name, apps)
             return ToolResult(
                 success=True,
