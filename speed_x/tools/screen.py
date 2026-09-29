@@ -56,13 +56,15 @@ class ScreenTool(BaseTool):
 
                 try:
                     if not self._capture_silent(tmp_path):
-                        return ToolResult(success=False, message="Could not capture screen for OCR.")
+                        return ToolResult(
+                            success=False, message="Could not capture screen for OCR."
+                        )
                     text = self._run_ocr(tmp_path)
-                    lines = [l for l in text.splitlines() if l.strip()]
+                    lines = [text_line for text_line in text.splitlines() if text_line.strip()]
                     summary = f"Detected {len(lines)} line(s) of text on screen."
                     preview = "\n".join(lines[:10])
                     if len(lines) > 10:
-                        preview += f"\n... ({len(lines)-10} more lines)"
+                        preview += f"\n... ({len(lines) - 10} more lines)"
                     return ToolResult(
                         success=True,
                         message=f"{summary}\n{preview}",
@@ -71,6 +73,30 @@ class ScreenTool(BaseTool):
                 finally:
                     if os.path.exists(tmp_path):
                         os.unlink(tmp_path)
+
+            elif action == "active_window":
+                from ..core.context import context_engine
+
+                app = context_engine.get_frontmost_app()
+                script = (
+                    'tell application "System Events"\n'
+                    "    try\n"
+                    "        return name of front window of (first application process whose frontmost is true)\n"
+                    "    on error\n"
+                    '        return ""\n'
+                    "    end try\n"
+                    "end tell"
+                )
+                try:
+                    title = self._run_applescript(script).strip()
+                except Exception:
+                    title = (
+                        ""  # no Accessibility access: the app name alone still answers the question
+                    )
+                message = f"You're in {app}" + (f", window “{title}”." if title else ".")
+                return ToolResult(
+                    success=True, message=message, data={"app": app, "window": title or None}
+                )
 
             else:
                 return ToolResult(success=False, message=f"Unknown screen action: '{action}'.")

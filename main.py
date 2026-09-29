@@ -2,7 +2,6 @@
 
 import sys
 import time
-from typing import Optional
 
 from rich.console import Console
 from rich.panel import Panel
@@ -109,25 +108,33 @@ def main():
             return
         if prompt in ("menubar", "--menubar"):
             from speed_x.ui.menubar import run_menubar
-            console.print("[green]Starting Speed-X Menu Bar app...[/green] (Look at the macOS top status bar)")
+
+            console.print(
+                "[green]Starting Speed-X Menu Bar app...[/green] (Look at the macOS top status bar)"
+            )
             run_menubar()
             return
         if sys.argv[1] == "--json" and len(sys.argv) > 2:
             import json as pyjson
+
             actual_prompt = " ".join(sys.argv[2:]).strip()
             router = CommandRouter()
             start = time.perf_counter()
             resp = router.process(actual_prompt, confirmed=True)
             latency = (time.perf_counter() - start) * 1000
-            print(pyjson.dumps({
-                "success": resp.success,
-                "message": resp.message,
-                "domain": resp.decision.domain,
-                "action": resp.decision.action,
-                "confidence": resp.decision.confidence,
-                "latency_ms": round(latency, 1),
-                "source": resp.decision.source,
-            }))
+            print(
+                pyjson.dumps(
+                    {
+                        "success": resp.success,
+                        "message": resp.message,
+                        "domain": resp.decision.domain,
+                        "action": resp.decision.action,
+                        "confidence": resp.decision.confidence,
+                        "latency_ms": round(latency, 1),
+                        "source": resp.decision.source,
+                    }
+                )
+            )
             return
         router = CommandRouter()
         run_command(router, prompt)

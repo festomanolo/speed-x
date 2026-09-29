@@ -5,10 +5,13 @@ from .base import BaseTool, ToolResult, registry
 from .clipboard import ClipboardTool
 from .files import FileTool
 from .mail import MailTool
+from .messaging import MessagingTool
 from .music import MusicTool
 from .notes import NotesTool
 from .screen import ScreenTool
 from .system import SystemTool
+from .timer import TimerTool
+from .web import WebTool
 from .workspaces import WorkspaceTool
 
 __all__ = [
@@ -24,4 +27,7 @@ __all__ = [
     "ScreenTool",
     "NotesTool",
     "MailTool",
+    "MessagingTool",
+    "TimerTool",
+    "WebTool",
 ]

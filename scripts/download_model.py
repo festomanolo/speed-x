@@ -1,7 +1,7 @@
 """Download aac6fef/laya-multilingual-coreml reliably using huggingface_hub."""
 
-import os
 from pathlib import Path
+
 from huggingface_hub import snapshot_download
 
 MODEL_ID = "aac6fef/laya-multilingual-coreml"

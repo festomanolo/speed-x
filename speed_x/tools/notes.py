@@ -12,15 +12,6 @@ class NotesTool(BaseTool):
     description = "Create, view, and update notes in native Apple Notes."
     supported_actions = ["create", "update", "open"]
 
-    def _run_applescript(self, script: str) -> str:
-        res = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return res.stdout.strip()
-
     def execute(self, action: str, params: Optional[Dict[str, Any]] = None) -> ToolResult:
         params = params or {}
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -49,10 +40,14 @@ class NotesTool(BaseTool):
                 )
 
             elif action in ("update", "append"):
-                addition = params.get("addition") or params.get("body") or f"Updated by Speed-X Assistant on {now_str}."
+                addition = (
+                    params.get("addition")
+                    or params.get("body")
+                    or f"Updated by Speed-X Assistant on {now_str}."
+                )
                 safe_add = addition.replace('"', '\\"').replace("\n", "<br/>")
 
-                script = f'''
+                script = f"""
                 tell application "Notes"
                     activate
                     if (count of notes) > 0 then
@@ -65,7 +60,7 @@ class NotesTool(BaseTool):
                         return "Speed-X Note"
                     end if
                 end tell
-                '''
+                """
                 note_name = self._run_applescript(script)
                 return ToolResult(
                     success=True,

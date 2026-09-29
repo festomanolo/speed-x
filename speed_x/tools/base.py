@@ -31,6 +31,12 @@ class BaseTool(ABC):
         """Execute a specific action with optional parameters."""
         pass
 
+    def _run_applescript(self, script: str, timeout: float = 8.0) -> str:
+        """Run AppleScript in-process when possible (see core.osa)."""
+        from ..core.osa import run_applescript
+
+        return run_applescript(script, timeout=timeout)
+
 
 class ToolRegistry:
     """Central registry for discovering and dispatching tools."""
@@ -47,7 +53,9 @@ class ToolRegistry:
     def list_tools(self) -> Dict[str, List[str]]:
         return {name: tool.supported_actions for name, tool in self._tools.items()}
 
-    def dispatch(self, domain: str, action: str, params: Optional[Dict[str, Any]] = None) -> ToolResult:
+    def dispatch(
+        self, domain: str, action: str, params: Optional[Dict[str, Any]] = None
+    ) -> ToolResult:
         tool = self.get(domain)
         if not tool:
             return ToolResult(
