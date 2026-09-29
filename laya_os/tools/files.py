@@ -40,7 +40,9 @@ class FileTool(BaseTool):
                         message=f"Found {len(matches)} matching file(s).",
                         data={"matches": matches},
                     )
-                return ToolResult(success=True, message=f"No files matching '{name}' found.", data={"matches": []})
+                return ToolResult(
+                    success=True, message=f"No files matching '{name}' found.", data={"matches": []}
+                )
 
             elif action == "find_pdf":
                 query = "kMDItemContentType == 'com.adobe.pdf'"

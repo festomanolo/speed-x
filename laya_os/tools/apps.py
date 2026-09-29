@@ -1,7 +1,7 @@
 """Native macOS application launcher, switcher, and manager."""
 
 import subprocess
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from .base import BaseTool, ToolResult, registry
 

@@ -18,7 +18,7 @@ class ContextEngine:
     def get_frontmost_app() -> str:
         script = (
             'tell application "System Events"\n'
-            '    return name of first application process whose frontmost is true\n'
+            "    return name of first application process whose frontmost is true\n"
             "end tell"
         )
         try:

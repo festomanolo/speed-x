@@ -1,54 +1,48 @@
-import Carbon
 import AppKit
+import Carbon
 
-class HotKeyManager {
+/// Global shortcuts: ⌥Space talks to Speed-X, ⌘⇧Space opens it for typing, ⌘⌥P shows / hides the notch.
+final class HotKeyManager {
     static let shared = HotKeyManager()
+    static let notification = Notification.Name("SpeedXHotKey")
+    static let voiceID: UInt32 = 1
+    static let typeID: UInt32 = 2
+    static let toggleID: UInt32 = 3
 
     private var hotKeyRefs: [EventHotKeyRef] = []
 
     func registerHotKeys() {
         var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
 
-        InstallEventHandler(GetApplicationEventTarget(), { (nextHandler, theEvent, userData) -> OSStatus in
+        InstallEventHandler(GetApplicationEventTarget(), { _, event, _ -> OSStatus in
             var hotKeyID = EventHotKeyID()
             let status = GetEventParameter(
-                theEvent,
-                EventParamName(kEventParamDirectObject),
-                EventParamType(typeEventHotKeyID),
-                nil,
-                MemoryLayout<EventHotKeyID>.size,
-                nil,
-                &hotKeyID
+                event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKeyID
             )
-
             if status == noErr {
+                let id = hotKeyID.id
                 DispatchQueue.main.async {
-                    NotificationCenter.default.post(name: NSNotification.Name("SpeedXToggleHotKey"), object: nil)
+                    NotificationCenter.default.post(name: HotKeyManager.notification, object: nil, userInfo: ["id": id])
                 }
             }
             return noErr
         }, 1, &eventType, nil, nil)
 
-        // 1. Option + Space (keyCode: 49 for Space)
-        let id1 = EventHotKeyID(signature: OSType(0x53504458), id: 1) // 'SPDX'
-        var ref1: EventHotKeyRef?
-        let s1 = RegisterEventHotKey(49, UInt32(optionKey), id1, GetApplicationEventTarget(), 0, &ref1)
-        if s1 == noErr, let r1 = ref1 {
-            hotKeyRefs.append(r1)
-        }
+        register(keyCode: 49, modifiers: UInt32(optionKey), id: Self.voiceID)            // ⌥ Space
+        register(keyCode: 49, modifiers: UInt32(cmdKey | shiftKey), id: Self.typeID)     // ⌘ ⇧ Space
+        register(keyCode: 35, modifiers: UInt32(cmdKey | optionKey), id: Self.toggleID)  // ⌘ ⌥ P
+    }
 
-        // 2. Cmd + Shift + Space (Secondary shortcut)
-        let id2 = EventHotKeyID(signature: OSType(0x53504458), id: 2)
-        var ref2: EventHotKeyRef?
-        let s2 = RegisterEventHotKey(49, UInt32(cmdKey | shiftKey), id2, GetApplicationEventTarget(), 0, &ref2)
-        if s2 == noErr, let r2 = ref2 {
-            hotKeyRefs.append(r2)
+    private func register(keyCode: UInt32, modifiers: UInt32, id: UInt32) {
+        let hotKeyID = EventHotKeyID(signature: OSType(0x53504458), id: id) // 'SPDX'
+        var ref: EventHotKeyRef?
+        if RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &ref) == noErr, let ref {
+            hotKeyRefs.append(ref)
         }
     }
 
     deinit {
-        for ref in hotKeyRefs {
-            UnregisterEventHotKey(ref)
-        }
+        hotKeyRefs.forEach { UnregisterEventHotKey($0) }
     }
 }

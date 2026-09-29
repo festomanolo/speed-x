@@ -1,15 +1,17 @@
 """Unit tests for Laya OS tools, brain, guardrails, and router."""
 
 import unittest
+from unittest.mock import patch
+
 from speed_x.core.brain import LayaBrain
 from speed_x.core.guardrails import guardrails
 from speed_x.core.router import CommandRouter
 from speed_x.tools.apps import normalize_app_name
 from speed_x.tools.base import registry
+from speed_x.tools.clipboard import ClipboardTool
 
 
 class TestSpeedX(unittest.TestCase):
-
     def test_tool_registry(self):
         tools = registry.list_tools()
         self.assertIn("system", tools)
@@ -110,7 +112,8 @@ class TestSpeedX(unittest.TestCase):
         self.assertTrue(resp.needs_confirmation)
 
         # Non-sensitive command executes directly
-        resp = router.process("inspect clipboard")
+        with patch.object(ClipboardTool, "_read_clipboard", return_value="test clipboard"):
+            resp = router.process("inspect clipboard")
         self.assertTrue(resp.success)
         self.assertEqual(resp.decision.domain, "clipboard")
 

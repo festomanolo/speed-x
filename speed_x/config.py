@@ -43,9 +43,13 @@ def is_apple_silicon() -> bool:
 # "cpu" (CPU_ONLY) provides rock-solid stability and zero crashes.
 # On Apple Silicon, "cpu_ne" or "cpu_gpu" can be used.
 if is_apple_silicon():
-    DEFAULT_COMPUTE_UNITS = os.getenv("SPEEDX_COMPUTE_UNITS", os.getenv("LAYA_COMPUTE_UNITS", "cpu_ne"))
+    DEFAULT_COMPUTE_UNITS = os.getenv(
+        "SPEEDX_COMPUTE_UNITS", os.getenv("LAYA_COMPUTE_UNITS", "cpu_ne")
+    )
 else:
-    DEFAULT_COMPUTE_UNITS = os.getenv("SPEEDX_COMPUTE_UNITS", os.getenv("LAYA_COMPUTE_UNITS", "cpu"))
+    DEFAULT_COMPUTE_UNITS = os.getenv(
+        "SPEEDX_COMPUTE_UNITS", os.getenv("LAYA_COMPUTE_UNITS", "cpu")
+    )
 
 LANGUAGE_MODES = ["en", "sw", "mixed"]
 DEFAULT_LANGUAGE = "mixed"

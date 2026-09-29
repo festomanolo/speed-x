@@ -3,14 +3,24 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
 from speed_x.core.router import CommandRouter
 from speed_x.tools.base import registry
 from speed_x.tools.files import FileTool
+from speed_x.tools.mail import MailTool
+from speed_x.tools.notes import NotesTool
 
 
 class TestSpeedXCommands(unittest.TestCase):
     def setUp(self):
         self.router = CommandRouter()
+        notes_patch = patch.object(NotesTool, "_run_applescript", return_value="Speed-X Note")
+        notes_patch.start()
+        self.addCleanup(notes_patch.stop)
+        mail_patch = patch.object(MailTool, "_run_applescript", return_value="")
+        mail_patch.start()
+        self.addCleanup(mail_patch.stop)
 
     def test_registry_has_new_tools(self):
         tools = registry.list_tools()
@@ -25,7 +35,10 @@ class TestSpeedXCommands(unittest.TestCase):
     def test_file_tool_make_file(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             tool = FileTool()
-            res = tool.execute("create", {"filename": "test_speedx.txt", "folder": tmp_dir, "content": "Hello Speed-X"})
+            res = tool.execute(
+                "create",
+                {"filename": "test_speedx.txt", "folder": tmp_dir, "content": "Hello Speed-X"},
+            )
             self.assertTrue(res.success)
             target = Path(tmp_dir) / "test_speedx.txt"
             self.assertTrue(target.exists())

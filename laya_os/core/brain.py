@@ -31,7 +31,14 @@ class LayaBrain:
 
     def _load_agent(self):
         """Safely attempt to load Core ML model with fallback."""
-        weight_file = self.model_dir / "model.mlpackage" / "Data" / "com.apple.CoreML" / "weights" / "weight.bin"
+        weight_file = (
+            self.model_dir
+            / "model.mlpackage"
+            / "Data"
+            / "com.apple.CoreML"
+            / "weights"
+            / "weight.bin"
+        )
         if not weight_file.exists() or weight_file.stat().st_size < 100_000_000:
             # Model weights not fully downloaded yet; use fast heuristic mode
             return
@@ -95,9 +102,13 @@ class LayaBrain:
         # --- WORKSPACES & ROUTINES ---
         # "start coding", "anza coding", "coding workspace", "start research"
         if re.search(r"\b(start coding|anza coding|coding workspace)\b", t):
-            return IntentDecision("workspaces", "activate", {"workspace": "coding"}, 0.95, False, "heuristic")
+            return IntentDecision(
+                "workspaces", "activate", {"workspace": "coding"}, 0.95, False, "heuristic"
+            )
         if re.search(r"\b(start research|anza utafiti|research workspace)\b", t):
-            return IntentDecision("workspaces", "activate", {"workspace": "research"}, 0.95, False, "heuristic")
+            return IntentDecision(
+                "workspaces", "activate", {"workspace": "research"}, 0.95, False, "heuristic"
+            )
 
         # --- APPS ---
         # Swahili: "fungua <app>", "washa <app>"
@@ -107,7 +118,9 @@ class LayaBrain:
             app = open_match.group(2).strip()
             # Avoid mistaking "open file" or "open safari"
             if not app.startswith("file") and not app.startswith("pdf"):
-                return IntentDecision("apps", "open", {"app": normalize_app_name(app)}, 0.90, False, "heuristic")
+                return IntentDecision(
+                    "apps", "open", {"app": normalize_app_name(app)}, 0.90, False, "heuristic"
+                )
 
         quit_match = re.search(r"\b(quit|close|funga|zima)\s+([a-zA-Z0-9\s]+)$", t)
         if quit_match:
@@ -115,7 +128,9 @@ class LayaBrain:
             if app in ("this", "hii", "current", "hii app", "this app"):
                 app = context_engine.get_frontmost_app()
             if not app.startswith("tab") and not app.startswith("window"):
-                return IntentDecision("apps", "quit", {"app": normalize_app_name(app)}, 0.90, True, "heuristic")
+                return IntentDecision(
+                    "apps", "quit", {"app": normalize_app_name(app)}, 0.90, True, "heuristic"
+                )
 
         if re.search(r"\b(running apps|apps zinazofanya kazi|list apps)\b", t):
             return IntentDecision("apps", "list_running", {}, 0.95, False, "heuristic")
@@ -128,7 +143,9 @@ class LayaBrain:
             return IntentDecision("files", "find_pdf", {"query": query}, 0.90, False, "heuristic")
         file_match = re.search(r"\b(find file|search file|tafuta faili)\s+(.+)$", t)
         if file_match:
-            return IntentDecision("files", "search", {"query": file_match.group(2).strip()}, 0.90, False, "heuristic")
+            return IntentDecision(
+                "files", "search", {"query": file_match.group(2).strip()}, 0.90, False, "heuristic"
+            )
         if re.search(r"\b(latest screenshot|screenshot ya mwisho)\b", t):
             return IntentDecision("files", "latest_screenshot", {}, 0.95, False, "heuristic")
 
@@ -144,7 +161,10 @@ class LayaBrain:
         # English: "take screenshot", "capture screen", "read screen", "what am i looking at"
         if re.search(r"\b(take screenshot|capture screen|piga screenshot|piga picha ya kioo)\b", t):
             return IntentDecision("screen", "capture", {}, 0.95, False, "heuristic")
-        if re.search(r"\b(read screen|ocr screen|what am i looking at|soma screen|soma kioo|angalia screen)\b", t):
+        if re.search(
+            r"\b(read screen|ocr screen|what am i looking at|soma screen|soma kioo|angalia screen)\b",
+            t,
+        ):
             return IntentDecision("screen", "read", {}, 0.95, False, "heuristic")
 
         return None
@@ -165,7 +185,15 @@ class LayaBrain:
                         "domain": {
                             "type": "choice",
                             "instructions": "Which domain best handles this Mac command?",
-                            "criteria": ["system", "apps", "music", "files", "clipboard", "workspaces", "general"],
+                            "criteria": [
+                                "system",
+                                "apps",
+                                "music",
+                                "files",
+                                "clipboard",
+                                "workspaces",
+                                "general",
+                            ],
                         },
                         "sensitive": {
                             "type": "noul",
@@ -194,7 +222,9 @@ class LayaBrain:
                     action = "read"
                 elif domain == "apps":
                     action = "open"
-                    clean_app = re.sub(r"(?i)\b(open|launch|fungua|washa|app)\b", "", prompt).strip()
+                    clean_app = re.sub(
+                        r"(?i)\b(open|launch|fungua|washa|app)\b", "", prompt
+                    ).strip()
                     params = {"app": normalize_app_name(clean_app)}
                 elif domain == "workspaces":
                     action = "list"
