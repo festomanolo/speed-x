@@ -1,8 +1,5 @@
 """Native macOS Menu Bar application for Laya OS using rumps."""
 
-import sys
-from typing import Optional
-
 import rumps
 
 from ..core.memory import memory
@@ -32,18 +29,32 @@ class LayaMenuBarApp(rumps.App):
 
         # 3. Quick Actions
         quick_menu = rumps.MenuItem("Quick Actions")
-        quick_menu.add(rumps.MenuItem("Play / Pause Music", callback=lambda _: self._dispatch("cheza muziki")))
-        quick_menu.add(rumps.MenuItem("Next Track", callback=lambda _: self._dispatch("next track")))
-        quick_menu.add(rumps.MenuItem("Toggle Dark Mode", callback=lambda _: self._dispatch("dark mode")))
+        quick_menu.add(
+            rumps.MenuItem("Play / Pause Music", callback=lambda _: self._dispatch("cheza muziki"))
+        )
+        quick_menu.add(
+            rumps.MenuItem("Next Track", callback=lambda _: self._dispatch("next track"))
+        )
+        quick_menu.add(
+            rumps.MenuItem("Toggle Dark Mode", callback=lambda _: self._dispatch("dark mode"))
+        )
         quick_menu.add(rumps.MenuItem("Mute Audio", callback=lambda _: self._dispatch("mute")))
-        quick_menu.add(rumps.MenuItem("Inspect Clipboard", callback=lambda _: self._dispatch("inspect clipboard")))
-        quick_menu.add(rumps.MenuItem("Read Screen (OCR)", callback=lambda _: self._dispatch("read screen")))
+        quick_menu.add(
+            rumps.MenuItem(
+                "Inspect Clipboard", callback=lambda _: self._dispatch("inspect clipboard")
+            )
+        )
+        quick_menu.add(
+            rumps.MenuItem("Read Screen (OCR)", callback=lambda _: self._dispatch("read screen"))
+        )
         self.menu.add(quick_menu)
 
         # 4. Workspaces
         ws_menu = rumps.MenuItem("Workspaces")
         for ws in memory.list_workspaces():
-            ws_menu.add(rumps.MenuItem(ws.title(), callback=lambda _, w=ws: self._dispatch(f"start {w}")))
+            ws_menu.add(
+                rumps.MenuItem(ws.title(), callback=lambda _, w=ws: self._dispatch(f"start {w}"))
+            )
         self.menu.add(ws_menu)
         self.menu.add(rumps.separator)
 

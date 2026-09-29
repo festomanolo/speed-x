@@ -23,7 +23,14 @@ from ..config import DEFAULT_COMPUTE_UNITS, DEFAULT_MODEL_DIR, is_apple_silicon
 from ..tools.apps import normalize_app_name, resolve_app
 from ..tools.web import site_url
 from .context import context_engine
-from .nlu import normalize, parse_duration, parse_number, semantic_matcher, split_commands, spoken_email
+from .nlu import (
+    normalize,
+    parse_duration,
+    parse_number,
+    semantic_matcher,
+    split_commands,
+    spoken_email,
+)
 
 SEMANTIC_ACCEPT = 0.62
 SEMANTIC_SUGGEST = 0.45
@@ -46,15 +53,36 @@ _QUESTION_RE = re.compile(
 )
 
 # Actions the AI may propose but must never run without the user's OK.
-LLM_CONFIRM = {("messaging", "send"), ("mail", "send"), ("apps", "quit"), ("system", "lock_screen"), ("system", "sleep"),
-               ("files", "create"), ("notes", "create"), ("notes", "update"), ("clipboard", "write"), ("clipboard", "clear"),
-               ("workspaces", "delete")}
+LLM_CONFIRM = {
+    ("messaging", "send"),
+    ("mail", "send"),
+    ("apps", "quit"),
+    ("system", "lock_screen"),
+    ("system", "sleep"),
+    ("files", "create"),
+    ("notes", "create"),
+    ("notes", "update"),
+    ("clipboard", "write"),
+    ("clipboard", "clear"),
+    ("workspaces", "delete"),
+}
 
 # Tools that activate their own app, making a preceding "open <app>" step redundant.
 SELF_OPENING = {"notes": "Notes", "mail": "Mail", "messaging": None}
 
 # Intents whose parameters swallow free text; for these, " and " is usually part of the content.
-CONTENT_INTENTS = {("music", "play_song"), ("workspaces", "create"), ("workspaces", "add"), ("messaging", "send"), ("notes", "create"), ("notes", "update"), ("mail", "send"), ("timer", "remind"), ("web", "search"), ("web", "youtube")}
+CONTENT_INTENTS = {
+    ("music", "play_song"),
+    ("workspaces", "create"),
+    ("workspaces", "add"),
+    ("messaging", "send"),
+    ("notes", "create"),
+    ("notes", "update"),
+    ("mail", "send"),
+    ("timer", "remind"),
+    ("web", "search"),
+    ("web", "youtube"),
+}
 
 
 @dataclass
@@ -73,7 +101,10 @@ class IntentDecision:
         return self.domain != "general"
 
 
-_MSG_APP_RE = re.compile(r"\s*\b(?:on|via|using|through|in|with|kwa|kwenye|kupitia)\s+(whats\s?app|imessage|messages|sms|text message)\b", re.IGNORECASE)
+_MSG_APP_RE = re.compile(
+    r"\s*\b(?:on|via|using|through|in|with|kwa|kwenye|kupitia)\s+(whats\s?app|imessage|messages|sms|text message)\b",
+    re.IGNORECASE,
+)
 _SAY_RE = r"(?:saying|sayin\w*|say|sey\w*|that says|that|telling (?:him|her|them)|tell (?:him|her|them)|and say|with (?:the )?(?:message|text)|message|kwamba|useme|ukisema|akisema|:)"
 
 
@@ -87,13 +118,17 @@ def _message_app(text: str) -> str:
 
 
 def _parse_message(raw: str) -> Optional[Dict[str, Any]]:
-    """"send (a whatsapp) message to Manolo saying hi", "text mom that I'm late", "mwambie Juma kwamba nimefika"."""
+    """ "send (a whatsapp) message to Manolo saying hi", "text mom that I'm late", "mwambie Juma kwamba nimefika"."""
     app = _message_app(raw)
     body = _MSG_APP_RE.sub(" ", raw)
     body = re.sub(r"\s+", " ", body).strip()
     patterns = [
-        r"^(?:send|write|tuma|andika)\s+(?:a\s+|an\s+)?(?:(?:whats\s?app|imessage|text|sms)\s+)?(?:message|msg|text|ujumbe|meseji)\s+(?:to|kwa)\s+(?P<to>.+?)(?:\s+" + _SAY_RE + r"\s*(?P<text>.+))?$",
-        r"^(?:message|text|whats\s?app|mwambie|tell|imessage)\s+(?P<to>.+?)\s+" + _SAY_RE + r"\s*(?P<text>.+)$",
+        r"^(?:send|write|tuma|andika)\s+(?:a\s+|an\s+)?(?:(?:whats\s?app|imessage|text|sms)\s+)?(?:message|msg|text|ujumbe|meseji)\s+(?:to|kwa)\s+(?P<to>.+?)(?:\s+"
+        + _SAY_RE
+        + r"\s*(?P<text>.+))?$",
+        r"^(?:message|text|whats\s?app|mwambie|tell|imessage)\s+(?P<to>.+?)\s+"
+        + _SAY_RE
+        + r"\s*(?P<text>.+)$",
         r"^(?:send|tuma)\s+(?P<text>.+?)\s+(?:to|kwa)\s+(?P<to>[\w'-]+(?:\s[\w'-]+)?)$",
     ]
     for pat in patterns:
@@ -111,7 +146,13 @@ def _parse_message(raw: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-_PLAYERS = {"spotify": "Spotify", "apple music": "Music", "music": "Music", "itunes": "Music", "music app": "Music"}
+_PLAYERS = {
+    "spotify": "Spotify",
+    "apple music": "Music",
+    "music": "Music",
+    "itunes": "Music",
+    "music app": "Music",
+}
 # "play <this>" means resume playback, not a search.
 _GENERIC_PLAY = re.compile(
     r"^(?:(?:some|a|the|my|any)\s+)?(?:music|muziki|songs?|wimbo|nyimbo|ngoma|tracks?|something|anything|it|again|"
@@ -120,13 +161,16 @@ _GENERIC_PLAY = re.compile(
 
 
 def _parse_song(raw: str) -> Optional[Dict[str, Any]]:
-    """"play nadina song" / "play shape of you by ed sheeran on spotify" / "cheza wimbo wa nadina"."""
+    """ "play nadina song" / "play shape of you by ed sheeran on spotify" / "cheza wimbo wa nadina"."""
     m = re.match(r"(?i)^(?:play|cheza|nichezee|put on)\s+(.+)$", raw.strip())
     if not m:
         return None
     body = m.group(1).strip(" .,!?")
     params: Dict[str, Any] = {}
-    pm = re.search(r"(?i)\s+(?:on|in|using|with|from|kwenye|kwa)\s+(spotify|apple music|music app|music|itunes)$", body)
+    pm = re.search(
+        r"(?i)\s+(?:on|in|using|with|from|kwenye|kwa)\s+(spotify|apple music|music app|music|itunes)$",
+        body,
+    )
     if pm:
         params["player"] = _PLAYERS[pm.group(1).lower()]
         body = body[: pm.start()].strip()
@@ -144,7 +188,9 @@ def _parse_song(raw: str) -> Optional[Dict[str, Any]]:
     return params
 
 
-def _d(domain, action, params=None, confidence=0.95, confirm=False, source="rules") -> IntentDecision:
+def _d(
+    domain, action, params=None, confidence=0.95, confirm=False, source="rules"
+) -> IntentDecision:
     return IntentDecision(domain, action, params or {}, confidence, confirm, source)
 
 
@@ -173,7 +219,14 @@ class LayaBrain:
             if self._attempted_load:
                 return
             self._attempted_load = True
-            weight_file = self.model_dir / "model.mlpackage" / "Data" / "com.apple.CoreML" / "weights" / "weight.bin"
+            weight_file = (
+                self.model_dir
+                / "model.mlpackage"
+                / "Data"
+                / "com.apple.CoreML"
+                / "weights"
+                / "weight.bin"
+            )
             if not weight_file.exists() or weight_file.stat().st_size < 100_000_000:
                 self.coreml_state = "missing"
                 return
@@ -181,7 +234,9 @@ class LayaBrain:
             try:
                 import laya_coreml as laya
 
-                self.agent = laya.load(str(self.model_dir), compute_units=self.compute_units, local_files_only=True)
+                self.agent = laya.load(
+                    str(self.model_dir), compute_units=self.compute_units, local_files_only=True
+                )
                 self.coreml_state = "ready"
             except Exception:
                 self.agent = None
@@ -215,9 +270,20 @@ class LayaBrain:
                         "domain": {
                             "type": "choice",
                             "instructions": "Which domain best handles this Mac command?",
-                            "criteria": ["system", "apps", "music", "files", "clipboard", "workspaces", "general"],
+                            "criteria": [
+                                "system",
+                                "apps",
+                                "music",
+                                "files",
+                                "clipboard",
+                                "workspaces",
+                                "general",
+                            ],
                         },
-                        "sensitive": {"type": "noul", "instructions": "Does this action shut down, lock, or terminate programs?"},
+                        "sensitive": {
+                            "type": "noul",
+                            "instructions": "Does this action shut down, lock, or terminate programs?",
+                        },
                     },
                 )
             except Exception as e:  # pragma: no cover - model failures
@@ -238,7 +304,11 @@ class LayaBrain:
         action, params = "auto", {"prompt": prompt}
         if domain == "files":
             action = "search"
-            clean_q = re.sub(r"(?i)\b(where is|where did i save|find|search|document|pdf|file|faili|tafuta|iko wapi|wapi|my)\b", "", prompt).strip()
+            clean_q = re.sub(
+                r"(?i)\b(where is|where did i save|find|search|document|pdf|file|faili|tafuta|iko wapi|wapi|my)\b",
+                "",
+                prompt,
+            ).strip()
             params = {"query": clean_q or prompt}
         elif domain == "music":
             action = "play_pause"
@@ -257,7 +327,20 @@ class LayaBrain:
     # ------------------------------------------------------------------ rules
 
     def _resolve_pronoun_app(self, word: str) -> Optional[str]:
-        if word in ("it", "that", "this", "hii", "hiyo", "hicho", "that app", "this app", "hii app", "current app", "the current app", "current"):
+        if word in (
+            "it",
+            "that",
+            "this",
+            "hii",
+            "hiyo",
+            "hicho",
+            "that app",
+            "this app",
+            "hii app",
+            "current app",
+            "the current app",
+            "current",
+        ):
             return self.last_app or context_engine.get_frontmost_app()
         return None
 
@@ -267,7 +350,9 @@ class LayaBrain:
         t = raw.lower()
 
         # --- MESSAGING (first: the message body may contain other command words) ---
-        if re.search(r"\b(message|msg|text|ujumbe|meseji|mwambie|whats\s?app|imessage|tell)\b", t) and not re.search(r"\b(email|e-mail|barua pepe)\b", t):
+        if re.search(
+            r"\b(message|msg|text|ujumbe|meseji|mwambie|whats\s?app|imessage|tell)\b", t
+        ) and not re.search(r"\b(email|e-mail|barua pepe)\b", t):
             msg = _parse_message(raw)
             if msg:
                 return _d("messaging", "send", msg, 0.95)
@@ -275,12 +360,24 @@ class LayaBrain:
         # --- TIMERS & REMINDERS (before music: "set a timer ... play" etc.) ---
         if re.search(r"\b(remind me|nikumbushe|reminder)\b", t):
             seconds = parse_duration(t) or 0
-            body = re.sub(r"(?i).*?\b(remind me|nikumbushe|set a reminder|create a reminder|reminder)\b\s*(to|that|kwamba)?\s*", "", raw)
-            body = re.sub(r"(?i)\b(in|baada ya|after)\s+(\S+\s+){0,4}?(seconds?|minutes?|hours?|dakika\s+\S+|saa\s+\S+|sekunde\s+\S+)\b", "", body)
+            body = re.sub(
+                r"(?i).*?\b(remind me|nikumbushe|set a reminder|create a reminder|reminder)\b\s*(to|that|kwamba)?\s*",
+                "",
+                raw,
+            )
+            body = re.sub(
+                r"(?i)\b(in|baada ya|after)\s+(\S+\s+){0,4}?(seconds?|minutes?|hours?|dakika\s+\S+|saa\s+\S+|sekunde\s+\S+)\b",
+                "",
+                body,
+            )
             body = re.sub(r"\s+", " ", body).strip(" ,")
-            body = re.sub(r"(?i)^(in|baada ya|to|that|kwamba)\s+", "", body).strip(" ,") or "Reminder"
+            body = (
+                re.sub(r"(?i)^(in|baada ya|to|that|kwamba)\s+", "", body).strip(" ,") or "Reminder"
+            )
             return _d("timer", "remind", {"text": body, "seconds": seconds}, 0.96)
-        if re.search(r"\b(timer|countdown|kipima muda)\b", t) and not re.search(r"\b(cancel|stop|zima|futa|left|remaining|imebaki|check)\b", t):
+        if re.search(r"\b(timer|countdown|kipima muda)\b", t) and not re.search(
+            r"\b(cancel|stop|zima|futa|left|remaining|imebaki|check)\b", t
+        ):
             seconds = parse_duration(t)
             if seconds:
                 label = ""
@@ -288,18 +385,28 @@ class LayaBrain:
                 if m and not parse_duration(m.group(1)):
                     label = m.group(1).strip()
                 return _d("timer", "set", {"seconds": seconds, "label": label}, 0.97)
-        if re.search(r"\b(what time is it|what's the time|tell me the time|saa ngapi|time now)\b", t):
+        if re.search(
+            r"\b(what time is it|what's the time|tell me the time|saa ngapi|time now)\b", t
+        ):
             return _d("timer", "time")
-        if re.search(r"\b(what's the date|what is the date|what day is it|today's date|tarehe gani|leo ni siku gani)\b", t):
+        if re.search(
+            r"\b(what's the date|what is the date|what day is it|today's date|tarehe gani|leo ni siku gani)\b",
+            t,
+        ):
             return _d("timer", "date")
 
         # --- WEB ---
-        m = re.search(r"^(?:search|look up|google|find|tafuta)\s+(?:on\s+)?youtube\s+(?:for\s+)?(.+)$", t) or re.search(r"^(?:play|cheza|watch|tazama)\s+(.+?)\s+(?:on|kwenye)\s+youtube$", t)
+        m = re.search(
+            r"^(?:search|look up|google|find|tafuta)\s+(?:on\s+)?youtube\s+(?:for\s+)?(.+)$", t
+        ) or re.search(r"^(?:play|cheza|watch|tazama)\s+(.+?)\s+(?:on|kwenye)\s+youtube$", t)
         if m:
             return _d("web", "youtube", {"query": m.group(1).strip()}, 0.95)
-        m = re.search(r"^(?:search(?: the web| online| google| the internet)? for|search|google|look up|tafuta mtandaoni|tafuta kwenye google)\s+(.+)$", t)
+        m = re.search(
+            r"^(?:search(?: the web| online| google| the internet)? for|search|google|look up|tafuta mtandaoni|tafuta kwenye google)\s+(.+)$",
+            t,
+        )
         if m and not re.search(r"^(file|faili|pdf|files)\b", m.group(1)):
-            query = raw[m.start(1):].strip()
+            query = raw[m.start(1) :].strip()
             return _d("web", "search", {"query": query}, 0.93)
         m = re.search(r"\btafuta\s+(.+?)\s+mtandaoni$", t)
         if m:
@@ -309,16 +416,28 @@ class LayaBrain:
             return _d("web", "open_url", {"site": m.group(1)}, 0.94)
 
         # --- MUSIC ---
-        if re.search(r"\b(next song|next track|skip song|skip track|skip this|(play )?the next one|wimbo unaofuata|ngoma nyingine)\b", t):
+        if re.search(
+            r"\b(next song|next track|skip song|skip track|skip this|(play )?the next one|wimbo unaofuata|ngoma nyingine)\b",
+            t,
+        ):
             return _d("music", "next")
-        if re.search(r"\b(previous song|prev track|previous track|last song|(play )?the previous one|wimbo uliopita)\b", t):
+        if re.search(
+            r"\b(previous song|prev track|previous track|last song|(play )?the previous one|wimbo uliopita)\b",
+            t,
+        ):
             return _d("music", "previous")
-        if re.search(r"\b(what song|current track|what's playing|what is playing|wimbo gani|ngoma gani)\b", t):
+        if re.search(
+            r"\b(what song|current track|what's playing|what is playing|wimbo gani|ngoma gani)\b", t
+        ):
             return _d("music", "get_current_track")
-        if re.search(r"\b(pause|simamisha|stop (the )?music|stop playing|tulia|acha muziki|zima muziki)\b", t):
+        if re.search(
+            r"\b(pause|simamisha|stop (the )?music|stop playing|tulia|acha muziki|zima muziki)\b", t
+        ):
             return _d("music", "pause")
         # "play music softly / kwa sauti ndogo" -> low volume, then play
-        if re.search(r"\b(music|muziki|song|wimbo|ngoma)\b", t) and re.search(r"\b(softly|quietly|low volume|in the background|sauti ndogo|taratibu|kwa upole)\b", t):
+        if re.search(r"\b(music|muziki|song|wimbo|ngoma)\b", t) and re.search(
+            r"\b(softly|quietly|low volume|in the background|sauti ndogo|taratibu|kwa upole)\b", t
+        ):
             return _d("system", "set_volume", {"level": 20, "then": "music.play"})
         if not re.search(r"\b(game|snake|youtube)\b", t):
             song = _parse_song(raw)
@@ -326,23 +445,38 @@ class LayaBrain:
                 return _d("music", "play_song", song, 0.94)
             if song:  # "play music on spotify"
                 return _d("music", "play", song)
-        if (re.search(r"\b(cheza|play)\b", t) or re.search(r"^resume( (the )?(music|song|playback))?$", t)) and not re.search(r"\b(game|snake|youtube)\b", t):
+        if (
+            re.search(r"\b(cheza|play)\b", t)
+            or re.search(r"^resume( (the )?(music|song|playback))?$", t)
+        ) and not re.search(r"\b(game|snake|youtube)\b", t):
             return _d("music", "play")
 
         # --- SYSTEM: VOLUME ---
-        vol_match = re.search(r"\b(?:set (?:the )?volume to|volume to|volume at|weka sauti(?: kwenye| hadi)?|volume)\s+(\S+(?:\s+\S+)?)", t)
+        vol_match = re.search(
+            r"\b(?:set (?:the )?volume to|volume to|volume at|weka sauti(?: kwenye| hadi)?|volume)\s+(\S+(?:\s+\S+)?)",
+            t,
+        )
         if vol_match:
             level = parse_number(vol_match.group(1))
             if level is not None:
                 return _d("system", "set_volume", {"level": max(0, min(100, level))})
-        to_level = re.search(r"\b(?:volume|sauti)\b.*\b(?:to|at|kwenye|hadi)\s+(.+?)(?:\s*(?:percent|%|asilimia))?$", t)
+        to_level = re.search(
+            r"\b(?:volume|sauti)\b.*\b(?:to|at|kwenye|hadi)\s+(.+?)(?:\s*(?:percent|%|asilimia))?$",
+            t,
+        )
         if to_level:
             level = parse_number(to_level.group(1))
             if level is not None:
                 return _d("system", "set_volume", {"level": max(0, min(100, level))})
-        if re.search(r"\b(ongeza sauti|volume up|turn (it |the volume |the sound )?up|louder|increase (the )?volume|raise (the )?volume|pandisha sauti|sauti juu)\b", t):
+        if re.search(
+            r"\b(ongeza sauti|volume up|turn (it |the volume |the sound )?up|louder|increase (the )?volume|raise (the )?volume|pandisha sauti|sauti juu)\b",
+            t,
+        ):
             return _d("system", "volume_up")
-        if re.search(r"\b(punguza sauti|volume down|turn (it |the volume |the sound )?down|quieter|decrease (the )?volume|lower (the )?volume|shusha sauti|sauti chini)\b", t):
+        if re.search(
+            r"\b(punguza sauti|volume down|turn (it |the volume |the sound )?down|quieter|decrease (the )?volume|lower (the )?volume|shusha sauti|sauti chini)\b",
+            t,
+        ):
             return _d("system", "volume_down")
         if re.search(r"\b(unmute|rudisha sauti|washa sauti)\b", t):
             return _d("system", "unmute")
@@ -350,9 +484,15 @@ class LayaBrain:
             return _d("system", "mute")
 
         # --- SYSTEM: LOCK, SLEEP, APPEARANCE ---
-        if re.search(r"\b(lock (the )?screen|lock (my )?mac|lock (the )?computer|funga kioo|funga screen|funga kompyuta)\b", t):
+        if re.search(
+            r"\b(lock (the )?screen|lock (my )?mac|lock (the )?computer|funga kioo|funga screen|funga kompyuta)\b",
+            t,
+        ):
             return _d("system", "lock_screen", confirm=True)
-        if re.search(r"\b(sleep mac|put (the |my )?mac to sleep|put (the )?computer to sleep|laza mac|laza kompyuta)\b", t):
+        if re.search(
+            r"\b(sleep mac|put (the |my )?mac to sleep|put (the )?computer to sleep|laza mac|laza kompyuta)\b",
+            t,
+        ):
             return _d("system", "sleep", confirm=True)
         if re.search(r"\b(dark mode|light mode|badili rangi ya kioo)\b", t):
             mode = ""
@@ -364,23 +504,57 @@ class LayaBrain:
 
         # --- WORKSPACES ---
         ws_name = r"(?:the\s+|my\s+|a\s+)?(?:workspace\s+(?:called\s+|named\s+|ya\s+)?([\w-]+(?:\s[\w-]+)?)|([\w-]+(?:\s[\w-]+)?)\s+workspace)"
-        m = re.search(r"^(?:create|make|set up|setup|save|tengeneza|unda)\s+(?:a\s+)?(?:new\s+)?" + ws_name + r"\s+(?:with|that opens|for|na|yenye)\s+(.+)$", t)
-        if m:
-            return _d("workspaces", "create", {"workspace": (m.group(1) or m.group(2)).strip(), "apps": m.group(3).strip()}, 0.95)
-        m = re.search(r"^(?:save|hifadhi)\s+(?:my\s+|these\s+|the\s+|this\s+)?(?:current\s+|open\s+)?(?:apps|setup|windows|workspace)?\s*as\s+" + ws_name + r"$", t) or re.search(
-            r"^(?:save|hifadhi)\s+(?:my\s+|these\s+|the\s+|this\s+)?(?:current\s+|open\s+)?(?:apps|setup|windows)\s+as\s+(?:a\s+)?([\w-]+(?:\s[\w-]+)?)()$", t
+        m = re.search(
+            r"^(?:create|make|set up|setup|save|tengeneza|unda)\s+(?:a\s+)?(?:new\s+)?"
+            + ws_name
+            + r"\s+(?:with|that opens|for|na|yenye)\s+(.+)$",
+            t,
         )
         if m:
-            return _d("workspaces", "save_current", {"workspace": (m.group(1) or m.group(2)).strip()}, 0.95)
+            return _d(
+                "workspaces",
+                "create",
+                {"workspace": (m.group(1) or m.group(2)).strip(), "apps": m.group(3).strip()},
+                0.95,
+            )
+        m = re.search(
+            r"^(?:save|hifadhi)\s+(?:my\s+|these\s+|the\s+|this\s+)?(?:current\s+|open\s+)?(?:apps|setup|windows|workspace)?\s*as\s+"
+            + ws_name
+            + r"$",
+            t,
+        ) or re.search(
+            r"^(?:save|hifadhi)\s+(?:my\s+|these\s+|the\s+|this\s+)?(?:current\s+|open\s+)?(?:apps|setup|windows)\s+as\s+(?:a\s+)?([\w-]+(?:\s[\w-]+)?)()$",
+            t,
+        )
+        if m:
+            return _d(
+                "workspaces",
+                "save_current",
+                {"workspace": (m.group(1) or m.group(2)).strip()},
+                0.95,
+            )
         m = re.search(r"^(?:add|ongeza|put)\s+(.+?)\s+(?:to|in|into|kwenye)\s+" + ws_name + r"$", t)
         if m:
-            return _d("workspaces", "add", {"workspace": (m.group(2) or m.group(3)).strip(), "apps": m.group(1).strip()}, 0.95)
+            return _d(
+                "workspaces",
+                "add",
+                {"workspace": (m.group(2) or m.group(3)).strip(), "apps": m.group(1).strip()},
+                0.95,
+            )
         m = re.search(r"^(?:delete|remove|futa|ondoa)\s+" + ws_name + r"$", t)
         if m:
-            return _d("workspaces", "delete", {"workspace": (m.group(1) or m.group(2)).strip()}, 0.95, confirm=True)
+            return _d(
+                "workspaces",
+                "delete",
+                {"workspace": (m.group(1) or m.group(2)).strip()},
+                0.95,
+                confirm=True,
+            )
         m = re.search(r"^(?:open|start|launch|activate|load|anza|fungua)\s+" + ws_name + r"$", t)
         if m:
-            return _d("workspaces", "activate", {"workspace": (m.group(1) or m.group(2)).strip()}, 0.95)
+            return _d(
+                "workspaces", "activate", {"workspace": (m.group(1) or m.group(2)).strip()}, 0.95
+            )
         if re.search(r"\b(start coding|anza coding|coding workspace|coding mode)\b", t):
             return _d("workspaces", "activate", {"workspace": "coding"})
         if re.search(r"\b(start research|anza utafiti|research workspace|research mode)\b", t):
@@ -392,49 +566,92 @@ class LayaBrain:
             t,
         )
         if note_new:
-            body = raw[note_new.end():].strip(" ,:")
-            body = re.sub(r"(?i)^(saying|that says|that|about|called|titled|kuhusu|inayosema)\s+", "", body).strip()
+            body = raw[note_new.end() :].strip(" ,:")
+            body = re.sub(
+                r"(?i)^(saying|that says|that|about|called|titled|kuhusu|inayosema)\s+", "", body
+            ).strip()
             title = "Speed-X Note"
             if body:
                 words = body.split()
                 title = " ".join(words[:6]) + ("…" if len(words) > 6 else "")
-            return _d("notes", "create", {"title": title, "body": body or "Created with Speed-X Assistant."}, 0.96)
+            return _d(
+                "notes",
+                "create",
+                {"title": title, "body": body or "Created with Speed-X Assistant."},
+                0.96,
+            )
 
-        note_upd = re.search(r"\b(update the existing one|update existing note|update the existing note|update (my |the )?(last )?note|append to (my |the )?note|add to (my |the )?note|ongeza kwenye note|ongeza note|rekebisha note)\b", t)
+        note_upd = re.search(
+            r"\b(update the existing one|update existing note|update the existing note|update (my |the )?(last )?note|append to (my |the )?note|add to (my |the )?note|ongeza kwenye note|ongeza note|rekebisha note)\b",
+            t,
+        )
         if note_upd:
-            addition = raw[note_upd.end():].strip(" ,:")
+            addition = raw[note_upd.end() :].strip(" ,:")
             addition = re.sub(r"(?i)^(saying|that says|with|kwamba)\s+", "", addition).strip()
             return _d("notes", "update", {"addition": addition or "Updated via Speed-X."}, 0.96)
 
         # --- EMAIL ---
-        mail = re.search(r"\b(send email with a message|send an email with a message|send (an )?email|compose (an )?email|write (an )?email|email|tuma email|tuma barua pepe)\b", t)
+        mail = re.search(
+            r"\b(send email with a message|send an email with a message|send (an )?email|compose (an )?email|write (an )?email|email|tuma email|tuma barua pepe)\b",
+            t,
+        )
         if mail and (mail.start() == 0 or re.search(r"\b(send|compose|write|tuma)\b", t)):
-            rest = raw[mail.end():].strip()
+            rest = raw[mail.end() :].strip()
             recipient = spoken_email(rest) or ""
             if recipient:
-                rest = re.sub(r"(?i)\b(to\s+)?[\w.+-]+(@|\s+at\s+)[\w-]+(\.|\s+dot\s+)[\w.-]+", "", rest).strip()
-            rest = re.sub(r"(?i)^(to\s+\w+\s+)?(saying|that says|with (a )?message|message|kwamba|inayosema)\s*", "", rest).strip(" ,:")
+                rest = re.sub(
+                    r"(?i)\b(to\s+)?[\w.+-]+(@|\s+at\s+)[\w-]+(\.|\s+dot\s+)[\w.-]+", "", rest
+                ).strip()
+            rest = re.sub(
+                r"(?i)^(to\s+\w+\s+)?(saying|that says|with (a )?message|message|kwamba|inayosema)\s*",
+                "",
+                rest,
+            ).strip(" ,:")
             subject = "Speed-X Quick Message"
             if rest:
                 words = rest.split()
                 subject = " ".join(words[:6]) + ("…" if len(words) > 6 else "")
-            return _d("mail", "send", {"recipient": recipient, "subject": subject, "message": rest or "Hello from Speed-X Assistant!"})
+            return _d(
+                "mail",
+                "send",
+                {
+                    "recipient": recipient,
+                    "subject": subject,
+                    "message": rest or "Hello from Speed-X Assistant!",
+                },
+            )
 
         # --- FILES ---
-        if re.search(r"\b(make new file|create new file|make a new file|create a file|create a new file|make file|new file|tengeneza faili|unda faili|faili jipya)\b", t):
-            name_match = re.search(r"\b(?:named|called|jina lake|jina)\s+([\w.-]+(?:\s+dot\s+\w+)?)", raw, re.IGNORECASE) or re.search(
-                r"\bfile\s+(?!named|called)([\w-]+\.\w+)", raw, re.IGNORECASE
+        if re.search(
+            r"\b(make new file|create new file|make a new file|create a file|create a new file|make file|new file|tengeneza faili|unda faili|faili jipya)\b",
+            t,
+        ):
+            name_match = re.search(
+                r"\b(?:named|called|jina lake|jina)\s+([\w.-]+(?:\s+dot\s+\w+)?)",
+                raw,
+                re.IGNORECASE,
+            ) or re.search(r"\bfile\s+(?!named|called)([\w-]+\.\w+)", raw, re.IGNORECASE)
+            filename = (
+                re.sub(r"\s+dot\s+", ".", name_match.group(1))
+                if name_match
+                else "SpeedX_Document.txt"
             )
-            filename = re.sub(r"\s+dot\s+", ".", name_match.group(1)) if name_match else "SpeedX_Document.txt"
             return _d("files", "create", {"filename": filename})
         if re.search(r"\b(find pdf|tafuta pdf|find (my |the )?pdfs?)\b", t):
             query = re.sub(r".*\b(find pdf|tafuta pdf|find (my |the )?pdfs?)\b", "", t).strip()
             return _d("files", "find_pdf", {"query": query}, 0.92)
-        if re.search(r"\b(latest screenshot|last screenshot|recent screenshot|screenshot ya mwisho)\b", t):
+        if re.search(
+            r"\b(latest screenshot|last screenshot|recent screenshot|screenshot ya mwisho)\b", t
+        ):
             return _d("files", "latest_screenshot")
-        file_match = re.search(r"^(?:find file|search file|find (?:my |the )?file|tafuta faili|find|where is|where's|where did i (?:save|put)|iko wapi)\s+(.+)$", t)
+        file_match = re.search(
+            r"^(?:find file|search file|find (?:my |the )?file|tafuta faili|find|where is|where's|where did i (?:save|put)|iko wapi)\s+(.+)$",
+            t,
+        )
         if file_match:
-            query = re.sub(r"\b(my|the|file|files|document|iko wapi|wapi)\b", " ", file_match.group(1))
+            query = re.sub(
+                r"\b(my|the|file|files|document|iko wapi|wapi)\b", " ", file_match.group(1)
+            )
             query = re.sub(r"\s+", " ", query).strip()
             if query:
                 return _d("files", "search", {"query": query}, 0.9)
@@ -442,9 +659,14 @@ class LayaBrain:
         # --- CLIPBOARD ---
         if re.search(r"\b(clear|empty|wipe|erase|futa|safisha)\s+(my |the )?clipboard\b", t):
             return _d("clipboard", "clear")
-        if re.search(r"\b(inspect clipboard|angalia clipboard|stats za clipboard|clipboard stats)\b", t):
+        if re.search(
+            r"\b(inspect clipboard|angalia clipboard|stats za clipboard|clipboard stats)\b", t
+        ):
             return _d("clipboard", "inspect")
-        if re.search(r"\b(read (my |the )?clipboard|what's on (my |the )?clipboard|kuna nini kwenye clipboard|soma clipboard)\b", t):
+        if re.search(
+            r"\b(read (my |the )?clipboard|what's on (my |the )?clipboard|kuna nini kwenye clipboard|soma clipboard)\b",
+            t,
+        ):
             return _d("clipboard", "read")
 
         # --- SCREEN ---
@@ -453,13 +675,21 @@ class LayaBrain:
             t,
         ):
             return _d("screen", "active_window")
-        if re.search(r"\b(take (a )?screenshot|capture (the )?screen|piga screenshot|piga picha ya kioo)\b", t):
+        if re.search(
+            r"\b(take (a )?screenshot|capture (the )?screen|piga screenshot|piga picha ya kioo)\b",
+            t,
+        ):
             return _d("screen", "capture")
-        if re.search(r"\b(read (my |the )?screen|ocr screen|what am i looking at|soma screen|soma kioo|angalia screen)\b", t):
+        if re.search(
+            r"\b(read (my |the )?screen|ocr screen|what am i looking at|soma screen|soma kioo|angalia screen)\b",
+            t,
+        ):
             return _d("screen", "read")
 
         # --- APPS (catch-alls, last) ---
-        if re.search(r"\b(running apps|apps zinazofanya kazi|list apps|what apps are (open|running))\b", t):
+        if re.search(
+            r"\b(running apps|apps zinazofanya kazi|list apps|what apps are (open|running))\b", t
+        ):
             return _d("apps", "list_running")
 
         open_match = re.search(r"^(?:open|launch|fungua|washa|switch to|go to|bring up)\s+(.+)$", t)
@@ -475,7 +705,9 @@ class LayaBrain:
                 if site_url(target):
                     return _d("web", "open_url", {"site": target}, 0.9)
                 # An unknown multi-word "app name" is almost always a sentence we failed to split.
-                if len(target.split()) <= 3 and not re.search(r"\b(and|then|to|saying|halafu|kisha)\b", target):
+                if len(target.split()) <= 3 and not re.search(
+                    r"\b(and|then|to|saying|halafu|kisha)\b", target
+                ):
                     return _d("apps", "open", {"app": normalize_app_name(target)}, 0.7)
 
         quit_match = re.search(r"^(?:quit|close|exit|kill|funga|zima|toka)\s+(.+)$", t)
@@ -503,7 +735,15 @@ class LayaBrain:
             return rule
 
         if match and match.score >= SEMANTIC_ACCEPT:
-            return IntentDecision(match.domain, match.action, match.params, round(min(0.94, match.score), 2), match.domain == "system" and match.action in ("lock_screen", "sleep"), "semantic", clean)
+            return IntentDecision(
+                match.domain,
+                match.action,
+                match.params,
+                round(min(0.94, match.score), 2),
+                match.domain == "system" and match.action in ("lock_screen", "sleep"),
+                "semantic",
+                clean,
+            )
 
         if self.coreml_enabled and self.agent is None and not self._attempted_load:
             self.warm_async()  # never block a command on a 30s model load
@@ -514,8 +754,17 @@ class LayaBrain:
 
         alternatives = []
         if match and match.score >= SEMANTIC_SUGGEST:
-            alternatives.append({"domain": match.domain, "action": match.action, "suggestion": match.example, "score": round(match.score, 2)})
-        return IntentDecision("general", "unhandled", {"prompt": prompt}, 0.0, False, "fallback", clean, alternatives)
+            alternatives.append(
+                {
+                    "domain": match.domain,
+                    "action": match.action,
+                    "suggestion": match.example,
+                    "score": round(match.score, 2),
+                }
+            )
+        return IntentDecision(
+            "general", "unhandled", {"prompt": prompt}, 0.0, False, "fallback", clean, alternatives
+        )
 
     def _llm_plan(self, prompt: str) -> Optional[List[IntentDecision]]:
         """Ask the local model when the fast layers can't cover the request."""
@@ -531,16 +780,32 @@ class LayaBrain:
         if not plan:
             return None
         steps = [
-            IntentDecision(s["domain"], s["action"], s["params"], 0.8, (s["domain"], s["action"]) in LLM_CONFIRM, "llm", prompt)
+            IntentDecision(
+                s["domain"],
+                s["action"],
+                s["params"],
+                0.8,
+                (s["domain"], s["action"]) in LLM_CONFIRM,
+                "llm",
+                prompt,
+            )
             for s in plan["steps"]
         ]
         if plan["then_answer"]:
-            steps.append(IntentDecision("assistant", "think", {"request": prompt}, 0.8, False, "llm", prompt))
+            steps.append(
+                IntentDecision("assistant", "think", {"request": prompt}, 0.8, False, "llm", prompt)
+            )
         if not steps and plan["reply"]:
-            steps.append(IntentDecision("assistant", "answer", {"text": plan["reply"]}, 0.8, False, "llm", prompt))
+            steps.append(
+                IntentDecision(
+                    "assistant", "answer", {"text": plan["reply"]}, 0.8, False, "llm", prompt
+                )
+            )
         return steps or None
 
-    def plan(self, prompt: str, commit: bool = True, allow_llm: bool = True) -> List[IntentDecision]:
+    def plan(
+        self, prompt: str, commit: bool = True, allow_llm: bool = True
+    ) -> List[IntentDecision]:
         """Ordered execution plan. Compound commands become multiple steps.
 
         commit=False (used for live previews) leaves the session context untouched.
@@ -571,7 +836,11 @@ class LayaBrain:
             all_handled = all(d.handled and d.confidence >= 0.7 for d in sub)
             whole_is_content = (whole.domain, whole.action) in CONTENT_INTENTS
             # Prefer the split when every clause is actionable and it adds information.
-            if all_handled and (not whole.handled or not whole_is_content or len({(d.domain, d.action) for d in sub}) > 1):
+            if all_handled and (
+                not whole.handled
+                or not whole_is_content
+                or len({(d.domain, d.action) for d in sub}) > 1
+            ):
                 steps = sub
             elif not whole.handled and any(d.handled for d in sub):
                 # Do what we understood and say clearly which clause we couldn't.
@@ -584,21 +853,28 @@ class LayaBrain:
             expanded.append(d)
             if follow:
                 domain, action = follow.split(".", 1)
-                expanded.append(IntentDecision(domain, action, {}, d.confidence, False, d.source, d.text))
+                expanded.append(
+                    IntentDecision(domain, action, {}, d.confidence, False, d.source, d.text)
+                )
         steps = expanded
 
         # Question clauses inside a compound command ("open safari and tell me a joke") are answered.
         if len(steps) > 1:
             steps = [
                 IntentDecision("assistant", "ask", {"question": d.text}, 0.85, False, "llm", d.text)
-                if not d.handled and _QUESTION_RE.search(d.text or "") else d
+                if not d.handled and _QUESTION_RE.search(d.text or "")
+                else d
                 for d in steps
             ]
 
         if any(not d.handled for d in steps):
             if not any(d.handled for d in steps) and _QUESTION_RE.search(clean):
                 # A question or conversation: answer it (streamed), no tools involved.
-                steps = [IntentDecision("assistant", "ask", {"question": clean}, 0.9, False, "llm", clean)]
+                steps = [
+                    IntentDecision(
+                        "assistant", "ask", {"question": clean}, 0.9, False, "llm", clean
+                    )
+                ]
             elif allow_llm:
                 # An action the fast layers don't know: let the local AI plan it.
                 llm_steps = self._llm_plan(clean)
@@ -608,14 +884,26 @@ class LayaBrain:
         # "open whatsapp and send a message to X": the open step tells us which app to message with.
         for i, d in enumerate(steps):
             if d.domain == "messaging" and not d.params.get("app"):
-                earlier = [e.params.get("app") for e in steps[:i] if e.domain == "apps" and e.action == "open"]
+                earlier = [
+                    e.params.get("app")
+                    for e in steps[:i]
+                    if e.domain == "apps" and e.action == "open"
+                ]
                 if earlier and earlier[-1] in ("WhatsApp", "Messages"):
                     d.params["app"] = earlier[-1]
 
         # "open spotify and play nadina": play in the player that was just opened.
         for i, d in enumerate(steps):
-            if d.domain == "music" and d.action in ("play", "play_song") and not d.params.get("player"):
-                earlier = [e.params.get("app") for e in steps[:i] if e.domain == "apps" and e.action == "open"]
+            if (
+                d.domain == "music"
+                and d.action in ("play", "play_song")
+                and not d.params.get("player")
+            ):
+                earlier = [
+                    e.params.get("app")
+                    for e in steps[:i]
+                    if e.domain == "apps" and e.action == "open"
+                ]
                 if earlier and earlier[-1] in ("Music", "Spotify"):
                     d.params["player"] = earlier[-1]
 

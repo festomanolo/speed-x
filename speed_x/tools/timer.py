@@ -26,7 +26,9 @@ def _describe(seconds: int) -> str:
 
 
 TIMERS_FILE = USER_CONFIG_DIR / "timers.json"
-MISSED_GRACE_S = 12 * 3600  # a timer that ended while the engine was down still notifies, unless it's stale
+MISSED_GRACE_S = (
+    12 * 3600
+)  # a timer that ended while the engine was down still notifies, unless it's stale
 
 
 def _notify(title: str, message: str):
@@ -74,7 +76,9 @@ class TimerTool(BaseTool):
                 self._schedule(label, now + 1, missed_at=ends)
         self._save()
 
-    def _schedule(self, label: str, ends: float, missed_at: Optional[float] = None) -> Dict[str, Any]:
+    def _schedule(
+        self, label: str, ends: float, missed_at: Optional[float] = None
+    ) -> Dict[str, Any]:
         entry: Dict[str, Any] = {"label": label, "ends": ends, "missed_at": missed_at}
         timer = threading.Timer(max(0.0, ends - time.time()), self._fire, args=(entry,))
         timer.daemon = True
@@ -111,12 +115,19 @@ class TimerTool(BaseTool):
                 self._save()
             suffix = f" to {label}" if label else ""
             events.emit("timer_started", seconds=seconds, label=label or "Timer")
-            return ToolResult(success=True, message=f"Timer set for {_describe(seconds)}{suffix}.", data={"seconds": seconds})
+            return ToolResult(
+                success=True,
+                message=f"Timer set for {_describe(seconds)}{suffix}.",
+                data={"seconds": seconds},
+            )
 
         if action == "list":
             if not self._timers:
                 return ToolResult(success=True, message="No timers running.")
-            parts = [f"{t['label'] or 'Timer'}: {_describe(int(t['ends'] - time.time()))} left" for t in self._timers]
+            parts = [
+                f"{t['label'] or 'Timer'}: {_describe(int(t['ends'] - time.time()))} left"
+                for t in self._timers
+            ]
             return ToolResult(success=True, message="; ".join(parts))
 
         if action == "cancel":
@@ -126,7 +137,10 @@ class TimerTool(BaseTool):
                     t["handle"].cancel()
                 self._timers.clear()
                 self._save()
-            return ToolResult(success=True, message=f"Cancelled {count} timer(s)." if count else "No timers to cancel.")
+            return ToolResult(
+                success=True,
+                message=f"Cancelled {count} timer(s)." if count else "No timers to cancel.",
+            )
 
         if action == "remind":
             text = params.get("text", "").strip() or "Reminder from Speed-X"
@@ -145,7 +159,9 @@ class TimerTool(BaseTool):
                 self._run_applescript(script)
             except Exception as e:
                 return ToolResult(success=False, message=f"Couldn't create the reminder: {e}")
-            return ToolResult(success=True, message=f"I'll remind you to {text}{when}.", data={"text": text})
+            return ToolResult(
+                success=True, message=f"I'll remind you to {text}{when}.", data={"text": text}
+            )
 
         if action == "time":
             return ToolResult(success=True, message=f"It's {now.strftime('%-I:%M %p')}.")

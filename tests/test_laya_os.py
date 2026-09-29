@@ -1,6 +1,7 @@
 """Unit tests for Laya OS tools, brain, guardrails, and router."""
 
 import unittest
+
 from laya_os.core.brain import LayaBrain
 from laya_os.core.guardrails import guardrails
 from laya_os.core.router import CommandRouter
@@ -9,7 +10,6 @@ from laya_os.tools.base import registry
 
 
 class TestLayaOS(unittest.TestCase):
-
     def test_tool_registry(self):
         tools = registry.list_tools()
         self.assertIn("system", tools)

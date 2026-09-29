@@ -1,6 +1,7 @@
 """Unit tests for Laya OS tools, brain, guardrails, and router."""
 
 import unittest
+
 from speed_x.core.brain import LayaBrain
 from speed_x.core.guardrails import guardrails
 from speed_x.core.router import CommandRouter
@@ -9,7 +10,6 @@ from speed_x.tools.base import registry
 
 
 class TestSpeedX(unittest.TestCase):
-
     def test_tool_registry(self):
         tools = registry.list_tools()
         self.assertIn("system", tools)

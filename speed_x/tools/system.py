@@ -20,7 +20,6 @@ class SystemTool(BaseTool):
         "toggle_dark_mode",
     ]
 
-
     def execute(self, action: str, params: Optional[Dict[str, Any]] = None) -> ToolResult:
         params = params or {}
         try:
@@ -58,7 +57,9 @@ class SystemTool(BaseTool):
                 try:
                     import ctypes
 
-                    login = ctypes.CDLL("/System/Library/PrivateFrameworks/login.framework/Versions/Current/login")
+                    login = ctypes.CDLL(
+                        "/System/Library/PrivateFrameworks/login.framework/Versions/Current/login"
+                    )
                     login.SACLockScreenImmediate()
                 except Exception:
                     subprocess.run(["pmset", "displaysleepnow"], check=False)
@@ -75,7 +76,9 @@ class SystemTool(BaseTool):
                     'tell application "System Events" to tell appearance preferences '
                     f"to set dark mode to {target}"
                 )
-                label = {"dark": "Dark mode on.", "light": "Light mode on."}.get(mode, "Toggled dark mode.")
+                label = {"dark": "Dark mode on.", "light": "Light mode on."}.get(
+                    mode, "Toggled dark mode."
+                )
                 return ToolResult(success=True, message=label)
 
             else:

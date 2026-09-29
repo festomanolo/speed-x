@@ -23,17 +23,41 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-from .core import events
+from .core import ai, events
 from .core.context import context_engine
 from .core.osa import AppleScriptError, set_remote_runner, warm_up
-from .core import ai
 from .core.router import CommandRouter, describe
 
 _write_lock = threading.Lock()
 _out = sys.stdout
 
-CONFIRM_WORDS = {"yes", "yeah", "yep", "confirm", "do it", "go ahead", "sure", "ok", "okay", "ndio", "ndiyo", "sawa", "endelea"}
-CANCEL_WORDS = {"no", "nope", "cancel", "stop", "never mind", "nevermind", "don't", "hapana", "acha", "sitaki"}
+CONFIRM_WORDS = {
+    "yes",
+    "yeah",
+    "yep",
+    "confirm",
+    "do it",
+    "go ahead",
+    "sure",
+    "ok",
+    "okay",
+    "ndio",
+    "ndiyo",
+    "sawa",
+    "endelea",
+}
+CANCEL_WORDS = {
+    "no",
+    "nope",
+    "cancel",
+    "stop",
+    "never mind",
+    "nevermind",
+    "don't",
+    "hapana",
+    "acha",
+    "sitaki",
+}
 
 
 def send(obj: Dict[str, Any]):
@@ -103,13 +127,25 @@ class Engine:
 
     def confirm(self, rid) -> Dict[str, Any]:
         if not self.pending:
-            return {"id": rid, "success": False, "message": "Nothing is waiting for confirmation.", "steps": []}
+            return {
+                "id": rid,
+                "success": False,
+                "message": "Nothing is waiting for confirmation.",
+                "steps": [],
+            }
         command, self.pending = self.pending, None
         return self.run(rid, command, confirmed=True)
 
     def cancel(self, rid) -> Dict[str, Any]:
         self.pending = None
-        return {"id": rid, "success": True, "message": "Cancelled.", "domain": "general", "action": "cancel", "steps": []}
+        return {
+            "id": rid,
+            "success": True,
+            "message": "Cancelled.",
+            "domain": "general",
+            "action": "cancel",
+            "steps": [],
+        }
 
     def preview(self, rid, command: str) -> Dict[str, Any]:
         start = time.perf_counter()
@@ -193,7 +229,9 @@ class RemoteAppleScript:
         with self._lock:
             slot = self._waiters.get(int(reply.get("osa_reply", -1)))
         if slot is not None:
-            slot.update(ok=bool(reply.get("ok")), result=reply.get("result"), error=reply.get("error"))
+            slot.update(
+                ok=bool(reply.get("ok")), result=reply.get("result"), error=reply.get("error")
+            )
             slot["done"].set()
 
 
@@ -209,7 +247,11 @@ def main():
 
     events.subscribe(send)
     engine = Engine()
-    remote = RemoteAppleScript() if os.getenv("SPEEDX_HOST_OSA", "1") == "1" and os.getenv("SPEEDX_HOSTED") == "1" else None
+    remote = (
+        RemoteAppleScript()
+        if os.getenv("SPEEDX_HOST_OSA", "1") == "1" and os.getenv("SPEEDX_HOSTED") == "1"
+        else None
+    )
     if remote:
         set_remote_runner(remote)
     else:
@@ -224,7 +266,12 @@ def main():
         try:
             resp = engine.handle(req)
         except Exception as e:  # keep the daemon alive no matter what
-            resp = {"id": req.get("id"), "success": False, "message": f"Engine error: {e}", "steps": []}
+            resp = {
+                "id": req.get("id"),
+                "success": False,
+                "message": f"Engine error: {e}",
+                "steps": [],
+            }
         if resp is not None:
             send(resp)
 

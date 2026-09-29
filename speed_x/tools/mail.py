@@ -12,7 +12,6 @@ class MailTool(BaseTool):
     description = "Compose and send emails via native Apple Mail."
     supported_actions = ["send", "compose", "open"]
 
-
     def execute(self, action: str, params: Optional[Dict[str, Any]] = None) -> ToolResult:
         params = params or {}
 
@@ -20,7 +19,9 @@ class MailTool(BaseTool):
             if action in ("send", "compose", "draft"):
                 recipient = params.get("recipient", "").strip()
                 subject = params.get("subject", "").strip() or "Message from Speed-X"
-                message_body = params.get("message", "").strip() or "Sent using Speed-X Assistant for macOS."
+                message_body = (
+                    params.get("message", "").strip() or "Sent using Speed-X Assistant for macOS."
+                )
 
                 safe_sub = subject.replace('"', '\\"').replace("\n", " ")
                 safe_msg = message_body.replace('"', '\\"').replace("\n", "\\n")

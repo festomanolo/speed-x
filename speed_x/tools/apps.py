@@ -106,7 +106,11 @@ def running_app_names() -> List[str]:
         ]
     except Exception:
         res = subprocess.run(
-            ["osascript", "-e", 'tell application "System Events" to get name of every process whose background only is false'],
+            [
+                "osascript",
+                "-e",
+                'tell application "System Events" to get name of every process whose background only is false',
+            ],
             capture_output=True,
             text=True,
         )
@@ -173,18 +177,30 @@ class AppTool(BaseTool):
                     return ToolResult(success=False, message="No application name specified.")
                 if app_installed(app_name):
                     # Known app: don't block the reply on a cold launch (can take seconds).
-                    subprocess.Popen(["open", "-a", app_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    return ToolResult(success=True, message=f"Opened {app_name}.", data={"app": app_name})
+                    subprocess.Popen(
+                        ["open", "-a", app_name],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    return ToolResult(
+                        success=True, message=f"Opened {app_name}.", data={"app": app_name}
+                    )
                 res = subprocess.run(["open", "-a", app_name], capture_output=True, text=True)
                 if res.returncode == 0:
-                    return ToolResult(success=True, message=f"Opened {app_name}.", data={"app": app_name})
-                return ToolResult(success=False, message=f"I couldn't find an app called '{raw_app}'.")
+                    return ToolResult(
+                        success=True, message=f"Opened {app_name}.", data={"app": app_name}
+                    )
+                return ToolResult(
+                    success=False, message=f"I couldn't find an app called '{raw_app}'."
+                )
 
             elif action in ("quit", "close"):
                 if not app_name:
                     return ToolResult(success=False, message="No application name specified.")
                 if app_name not in running_app_names():
-                    return ToolResult(success=True, message=f"{app_name} isn't running.", data={"app": app_name})
+                    return ToolResult(
+                        success=True, message=f"{app_name} isn't running.", data={"app": app_name}
+                    )
                 self._run_applescript(f'tell application "{app_name}" to quit')
                 return ToolResult(success=True, message=f"Quit {app_name}.", data={"app": app_name})
 

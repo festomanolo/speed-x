@@ -2,6 +2,7 @@
 
 import json
 from typing import Any, Dict, List, Optional
+
 from ..config import MEMORY_FILE
 
 DEFAULT_CONFIG: Dict[str, Any] = {

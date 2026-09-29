@@ -3,8 +3,8 @@
 
 import json
 import subprocess
-import urllib.request
 import sys
+import urllib.request
 from typing import List, Optional
 
 
@@ -106,7 +106,7 @@ def comment_issue(issue_number: int, body: str) -> bool:
         },
     )
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req):
             print(f"Added comment to Issue #{issue_number}")
             return True
     except Exception as e:
