@@ -170,6 +170,9 @@ class MessagingTool(BaseTool):
 
     # ------------------------------------------------------------------ WhatsApp
 
+    # The pasteboard is written here and only pasted once it reads back the new value:
+    # pasting straight after `set the clipboard` raced the write and typed whatever was
+    # copied before (e.g. "localhost:3000") into WhatsApp's search box.
     WHATSAPP_SCRIPT = """
     set previousClipboard to ""
     try
