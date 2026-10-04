@@ -89,7 +89,7 @@ struct MicrophonePicker: View {
                     Button {
                         model.chooseDevice(uid: nil)
                     } label: {
-                        Label("Automatic (AirPods first)", systemImage: model.preferredDeviceUID == nil ? "checkmark" : "sparkles")
+                        Label("Automatic (any mic)", systemImage: model.preferredDeviceUID == nil ? "checkmark" : "sparkles")
                     }
                     Divider()
                     ForEach(model.inputDevices) { device in
