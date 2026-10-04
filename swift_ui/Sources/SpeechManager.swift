@@ -47,6 +47,16 @@ final class SpeechManager: NSObject {
     private var isWarming = false
     private var lastWarm = Date.distantPast
     private var warmTask: SFSpeechRecognitionTask?
+    /// Bumped on every start so late callbacks from an earlier session (or its recognition
+    /// task finishing after stop) can't end the session that is running now.
+    private var session = 0
+    private var audioStartedAt = Date()
+    private var audioRestarts = 0
+    private var usedOnDevice = false
+    private var retriedServer = false
+    /// The tap runs on the audio thread; the request can be swapped from main (retry).
+    private let requestLock = NSLock()
+    private var liveRequest: SFSpeechAudioBufferRecognitionRequest?
 
     /// Vocabulary hints: app names, bilingual command words.
     var contextualStrings: [String] = [
@@ -144,26 +154,24 @@ final class SpeechManager: NSObject {
             return
         }
 
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        request.taskHint = .search
-        request.addsPunctuation = false
-        request.contextualStrings = contextualStrings
-        if recognizer.supportsOnDeviceRecognition { request.requiresOnDeviceRecognition = true }
+        // A prewarm still running would compete with this session's recognition task.
+        warmTask?.cancel()
+        warmTask = nil
+        isWarming = false
 
+        session += 1
         transcript = ""
         heardSpeech = false
         delivered = false
         peakRMS = 0
         recentLevel = 0
+        audioRestarts = 0
+        retriedServer = false
         startedAt = Date()
+        audioStartedAt = Date()
         lastPartialAt = Date()
 
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self, weak request] buffer, _ in
-            request?.append(buffer)
-            self?.measure(buffer)
-        }
-
+        installTap(on: input, format: format)
         do {
             engine.prepare()
             try engine.start()
@@ -174,22 +182,85 @@ final class SpeechManager: NSObject {
         }
 
         self.engine = engine
-        self.request = request
-        self.task = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            DispatchQueue.main.async { self?.handle(result: result, error: error) }
-        }
+        beginRecognition(onDevice: recognizer.supportsOnDeviceRecognition)
 
-        // AirPods connecting/disconnecting mid-command reconfigures the engine: commit what we have.
+        // Starting the mic on AirPods switches them to the headset profile, which reconfigures
+        // the engine right away. Re-attach to the new format instead of ending the command.
         configObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
         ) { [weak self] _ in
-            self?.stop(.endOfSpeech)
+            self?.restartAudio()
         }
 
         isRecording = true
         onStateChange?(true)
         endpointTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in self?.tick() }
         RunLoop.main.add(endpointTimer!, forMode: .common)
+    }
+
+    private func installTap(on input: AVAudioInputNode, format: AVAudioFormat) {
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            guard let self else { return }
+            self.requestLock.lock()
+            let request = self.liveRequest
+            self.requestLock.unlock()
+            request?.append(buffer)
+            self.measure(buffer)
+        }
+    }
+
+    private func beginRecognition(onDevice: Bool) {
+        guard let recognizer else { return }
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        request.taskHint = .search
+        request.addsPunctuation = false
+        request.contextualStrings = contextualStrings
+        request.requiresOnDeviceRecognition = onDevice
+        usedOnDevice = onDevice
+
+        requestLock.lock()
+        let old = liveRequest
+        liveRequest = request
+        requestLock.unlock()
+        old?.endAudio()
+        task?.cancel()
+
+        self.request = request
+        let id = session
+        self.task = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            DispatchQueue.main.async {
+                guard let self, self.session == id, self.request === request else { return }
+                self.handle(result: result, error: error)
+            }
+        }
+    }
+
+    private func restartAudio() {
+        guard isRecording, let engine else { return }
+        guard audioRestarts < 4 else {
+            stop(heardSpeech ? .endOfSpeech : .error("The microphone keeps changing. Try again, or pick another input in System ▸ Microphone."))
+            return
+        }
+        audioRestarts += 1
+        engine.stop()
+        engine.inputNode.removeTap(onBus: 0)
+        let format = engine.inputNode.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            stop(heardSpeech ? .endOfSpeech : .error("The microphone disconnected."))
+            return
+        }
+        installTap(on: engine.inputNode, format: format)
+        do {
+            engine.prepare()
+            try engine.start()
+        } catch {
+            stop(heardSpeech ? .endOfSpeech : .error("Microphone failed to restart: \(error.localizedDescription)"))
+            return
+        }
+        // Give the new route a moment before deciding it's silent.
+        audioStartedAt = Date()
+        peakRMS = 0
     }
 
     // MARK: - Audio metering
@@ -226,9 +297,22 @@ final class SpeechManager: NSObject {
             }
             if result.isFinal { stop(.endOfSpeech); return }
         }
-        if error != nil {
+        if let error {
             // "No speech detected" arrives as an error; treat as end of speech when we have text.
-            stop(transcript.isEmpty ? .cancelled : .endOfSpeech)
+            if !transcript.isEmpty { stop(.endOfSpeech); return }
+            let ns = error as NSError
+            let noSpeech = ns.code == 1110 || ns.code == 203
+            let cancelled = ns.code == 216 || ns.code == 301 || ns.domain == NSCocoaErrorDomain && ns.code == NSUserCancelledError
+            if cancelled { return } // our own restart/retry; a newer task is running
+            if noSpeech, Date().timeIntervalSince(startedAt) > 2 { stop(.cancelled); return }
+            // The on-device model can fail to load (missing asset, busy daemon): retry once on the
+            // regular recognizer rather than ending the command the moment it started.
+            if usedOnDevice, !retriedServer {
+                retriedServer = true
+                beginRecognition(onDevice: false)
+                return
+            }
+            stop(.error("Speech recognition stopped: \(error.localizedDescription)"))
         }
     }
 
@@ -245,7 +329,7 @@ final class SpeechManager: NSObject {
                 return
             }
         } else {
-            if elapsed > 1.6 && peakRMS < 0.000_05 {
+            if now.timeIntervalSince(audioStartedAt) > 3.0 && peakRMS < 0.000_05 {
                 let name = activeDeviceName ?? "the microphone"
                 stop(.error("No audio coming from \(name). Connect your AirPods or pick another input."))
                 return
@@ -267,6 +351,9 @@ final class SpeechManager: NSObject {
 
         engine?.stop()
         engine?.inputNode.removeTap(onBus: 0)
+        requestLock.lock()
+        liveRequest = nil
+        requestLock.unlock()
         request?.endAudio()
         task?.finish()
         engine = nil
