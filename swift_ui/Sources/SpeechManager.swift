@@ -182,12 +182,10 @@ final class SpeechManager: NSObject {
         }
 
         self.engine = engine
-        self.request = request
-        self.task = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            DispatchQueue.main.async { self?.handle(result: result, error: error) }
-        }
+        beginRecognition(onDevice: recognizer.supportsOnDeviceRecognition)
 
-        // AirPods connecting/disconnecting mid-command reconfigures the engine: commit what we have.
+        // Starting the mic on AirPods switches them to the headset profile, which reconfigures
+        // the engine right away. Re-attach to the new format instead of ending the command.
         configObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
         ) { [weak self] _ in
