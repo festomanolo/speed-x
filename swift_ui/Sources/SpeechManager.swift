@@ -331,7 +331,7 @@ final class SpeechManager: NSObject {
         } else {
             if now.timeIntervalSince(audioStartedAt) > 3.0 && peakRMS < 0.000_05 {
                 let name = activeDeviceName ?? "the microphone"
-                stop(.error("No audio coming from \(name). Connect your AirPods or pick another input."))
+                stop(.error("No audio coming from \(name). Check that it's switched on and unmuted, or pick another input."))
                 return
             }
             if elapsed > noSpeechTimeout { stop(.cancelled); return }
