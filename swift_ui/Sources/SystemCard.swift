@@ -112,7 +112,7 @@ struct MicrophonePicker: View {
             LevelMeter(level: model.phase == .listening ? model.micLevel : 0, tint: Module.system.tint)
 
             if model.selectedDevice?.isBuiltIn == true {
-                Label("Built-in mic may be silent on this Mac — connect AirPods for voice.", systemImage: "exclamationmark.triangle.fill")
+                Label("Built-in mic may be silent on this Mac — connect a USB mic or AirPods for voice.", systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.orange)
             }
