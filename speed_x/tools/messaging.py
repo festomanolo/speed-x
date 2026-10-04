@@ -194,30 +194,38 @@ class MessagingTool(BaseTool):
     try
         set previousClipboard to the clipboard as text
     end try
-    tell application "WhatsApp" to activate
-    delay 0.9
-    tell application "System Events"
-        tell process "WhatsApp"
-            set frontmost to true
-            -- 1. search the chat list for the contact
-            keystroke "f" using {command down}
-            delay 0.35
-            keystroke "a" using {command down}
-            set the clipboard to "__NAME__"
-            keystroke "v" using {command down}
-            delay 1.4
-            -- 2. open the first result
-            key code 125
-            delay 0.25
-            key code 36
-            delay 1.0
-            -- 3. paste the message and send
-            set the clipboard to "__TEXT__"
-            keystroke "v" using {command down}
-            delay 0.3
-            key code 36
+    try
+        tell application "WhatsApp" to activate
+        delay 0.9
+        tell application "System Events"
+            tell process "WhatsApp"
+                set frontmost to true
+                -- 1. search the chat list for the contact
+                keystroke "f" using {command down}
+                delay 0.35
+                keystroke "a" using {command down}
+            end tell
         end tell
-    end tell
+        my pasteInto("__NAME__")
+        delay 1.4
+        tell application "System Events"
+            tell process "WhatsApp"
+                -- 2. open the first result
+                key code 125
+                delay 0.25
+                key code 36
+            end tell
+        end tell
+        delay 1.0
+        -- 3. paste the message and send
+        my pasteInto("__TEXT__")
+        delay 0.3
+        tell application "System Events" to tell process "WhatsApp" to key code 36
+    on error errMsg number errNum
+        delay 0.3
+        set the clipboard to previousClipboard
+        error errMsg number errNum
+    end try
     delay 0.3
     set the clipboard to previousClipboard
     return "ok"
