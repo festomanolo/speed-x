@@ -3,7 +3,7 @@ import AudioToolbox
 import Foundation
 import Speech
 
-/// Streams the selected microphone (AirPods first, see AudioDevices) into on-device
+/// Streams the selected microphone (any mic; see AudioDevices for the automatic order) into on-device
 /// speech recognition and decides when the user has finished speaking.
 ///
 /// Endpointing: once speech has been heard, the command is committed after
