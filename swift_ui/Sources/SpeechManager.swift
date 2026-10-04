@@ -159,11 +159,14 @@ final class SpeechManager: NSObject {
         warmTask = nil
         isWarming = false
 
+        session += 1
         transcript = ""
         heardSpeech = false
         delivered = false
         peakRMS = 0
         recentLevel = 0
+        audioRestarts = 0
+        retriedServer = false
         startedAt = Date()
         lastPartialAt = Date()
 
