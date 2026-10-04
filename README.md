@@ -41,7 +41,7 @@
 ┌──────────────────────── SpeedX.app (SwiftUI, Liquid Glass) ────────────────────────┐
 │  RootView ─ GlassEffectContainer ─┬─ Card (Engine / System / Assistant)            │
 │                                   └─ Side notch (bezel-flared glass, 3 gauges)     │
-│  SpeechManager ─ AudioDevices (AirPods first) ─ on-device SFSpeechRecognizer       │
+│  SpeechManager ─ AudioDevices (any mic)       ─ on-device SFSpeechRecognizer       │
 │  EngineClient ── JSON lines ──┐          OSAThread (runs AppleScript for engine)   │
 └───────────────────────────────┼────────────────────────────────────────────────────┘
                                 ▼
