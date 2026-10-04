@@ -23,7 +23,7 @@ struct AudioInputDevice: Identifiable, Hashable {
         if lower.contains("airpods pro") { return "airpodspro" }
         if lower.contains("airpods") { return "airpods" }
         if isBluetooth { return "headphones" }
-        if transport == kAudioDeviceTransportTypeUSB { return "cable.connector" }
+        if isUSB { return "cable.connector" }
         if isVirtual { return "waveform.circle" }
         return "mic"
     }
