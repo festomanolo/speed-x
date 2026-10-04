@@ -329,7 +329,7 @@ final class SpeechManager: NSObject {
                 return
             }
         } else {
-            if elapsed > 1.6 && peakRMS < 0.000_05 {
+            if now.timeIntervalSince(audioStartedAt) > 3.0 && peakRMS < 0.000_05 {
                 let name = activeDeviceName ?? "the microphone"
                 stop(.error("No audio coming from \(name). Connect your AirPods or pick another input."))
                 return
@@ -351,6 +351,9 @@ final class SpeechManager: NSObject {
 
         engine?.stop()
         engine?.inputNode.removeTap(onBus: 0)
+        requestLock.lock()
+        liveRequest = nil
+        requestLock.unlock()
         request?.endAudio()
         task?.finish()
         engine = nil
