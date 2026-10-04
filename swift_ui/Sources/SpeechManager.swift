@@ -47,6 +47,16 @@ final class SpeechManager: NSObject {
     private var isWarming = false
     private var lastWarm = Date.distantPast
     private var warmTask: SFSpeechRecognitionTask?
+    /// Bumped on every start so late callbacks from an earlier session (or its recognition
+    /// task finishing after stop) can't end the session that is running now.
+    private var session = 0
+    private var audioStartedAt = Date()
+    private var audioRestarts = 0
+    private var usedOnDevice = false
+    private var retriedServer = false
+    /// The tap runs on the audio thread; the request can be swapped from main (retry).
+    private let requestLock = NSLock()
+    private var liveRequest: SFSpeechAudioBufferRecognitionRequest?
 
     /// Vocabulary hints: app names, bilingual command words.
     var contextualStrings: [String] = [
@@ -144,12 +154,10 @@ final class SpeechManager: NSObject {
             return
         }
 
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        request.taskHint = .search
-        request.addsPunctuation = false
-        request.contextualStrings = contextualStrings
-        if recognizer.supportsOnDeviceRecognition { request.requiresOnDeviceRecognition = true }
+        // A prewarm still running would compete with this session's recognition task.
+        warmTask?.cancel()
+        warmTask = nil
+        isWarming = false
 
         transcript = ""
         heardSpeech = false
