@@ -105,10 +105,11 @@ final class AudioDevices {
 
     static func automaticChoice(_ devices: [AudioInputDevice]) -> AudioInputDevice? {
         func rank(_ d: AudioInputDevice) -> Int {
-            if d.isBluetooth { return 0 }
-            if d.transport == kAudioDeviceTransportTypeUSB { return 1 }
-            if !d.isBuiltIn && !d.isVirtual { return 2 }
-            if d.isDefault && !d.isBuiltIn { return 3 }
+            let external = !d.isBuiltIn && !d.isVirtual
+            if d.isDefault && external { return 0 }                  // whatever macOS is set to
+            if d.isUSB { return 1 }
+            if external && !d.isBluetooth { return 2 }                // other wired / Thunderbolt
+            if d.isBluetooth { return 3 }                             // AirPods & headsets
             if d.isBuiltIn { return 4 }
             return 5 // virtual loopback devices (BoomAudio etc.) never carry a voice
         }
