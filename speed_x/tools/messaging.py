@@ -174,6 +174,22 @@ class MessagingTool(BaseTool):
     # pasting straight after `set the clipboard` raced the write and typed whatever was
     # copied before (e.g. "localhost:3000") into WhatsApp's search box.
     WHATSAPP_SCRIPT = """
+    on putClipboard(value)
+        set the clipboard to value
+        repeat 40 times
+            try
+                if (the clipboard as text) is value then return
+            end try
+            delay 0.05
+        end repeat
+        error "Couldn't put the text on the clipboard." number 1
+    end putClipboard
+
+    on pasteInto(value)
+        my putClipboard(value)
+        tell application "System Events" to tell process "WhatsApp" to keystroke "v" using {command down}
+    end pasteInto
+
     set previousClipboard to ""
     try
         set previousClipboard to the clipboard as text
