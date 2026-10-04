@@ -110,7 +110,7 @@ final class AppModel {
         case .listening: return "Listening"
         case .thinking: return "Thinking"
         case .confirming: return "Confirm"
-        default: return selectedDevice?.isBluetooth == true ? "AirPods" : "Ready"
+        default: return selectedDevice.map { $0.isBluetooth ? "AirPods" : $0.isUSB ? "USB mic" : "Ready" } ?? "Ready"
         }
     }
 
