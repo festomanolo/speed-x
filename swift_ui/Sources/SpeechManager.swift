@@ -297,9 +297,22 @@ final class SpeechManager: NSObject {
             }
             if result.isFinal { stop(.endOfSpeech); return }
         }
-        if error != nil {
+        if let error {
             // "No speech detected" arrives as an error; treat as end of speech when we have text.
-            stop(transcript.isEmpty ? .cancelled : .endOfSpeech)
+            if !transcript.isEmpty { stop(.endOfSpeech); return }
+            let ns = error as NSError
+            let noSpeech = ns.code == 1110 || ns.code == 203
+            let cancelled = ns.code == 216 || ns.code == 301 || ns.domain == NSCocoaErrorDomain && ns.code == NSUserCancelledError
+            if cancelled { return } // our own restart/retry; a newer task is running
+            if noSpeech, Date().timeIntervalSince(startedAt) > 2 { stop(.cancelled); return }
+            // The on-device model can fail to load (missing asset, busy daemon): retry once on the
+            // regular recognizer rather than ending the command the moment it started.
+            if usedOnDevice, !retriedServer {
+                retriedServer = true
+                beginRecognition(onDevice: false)
+                return
+            }
+            stop(.error("Speech recognition stopped: \(error.localizedDescription)"))
         }
     }
 
