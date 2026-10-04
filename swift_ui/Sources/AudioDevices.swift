@@ -34,8 +34,9 @@ struct AudioInputDevice: Identifiable, Hashable {
 /// Automatic choice works with any microphone: the input selected in macOS wins when it is
 /// a real external device, otherwise wired mics (USB, then other external hardware) come
 /// before Bluetooth headsets. On this Hackintosh the "Built-in Microphone" is reported as
-/// only falls back to built-in hardware when nothing else is connected. The user can pin
-/// a specific device; that choice is remembered by UID.
+/// the default input but delivers silence, so built-in hardware is only a last resort and
+/// virtual loopback devices are never picked over a real mic. The user can pin a specific
+/// device; that choice is remembered by UID.
 final class AudioDevices {
     static let shared = AudioDevices()
     static let preferredKey = "SpeedXPreferredInputUID"
