@@ -31,8 +31,9 @@ struct AudioInputDevice: Identifiable, Hashable {
 
 /// Enumerates input devices and picks the one Speed-X should listen on.
 ///
-/// On this Hackintosh the "Built-in Microphone" is reported as the default input but
-/// delivers silence, so the automatic choice prefers Bluetooth (AirPods), then USB, and
+/// Automatic choice works with any microphone: the input selected in macOS wins when it is
+/// a real external device, otherwise wired mics (USB, then other external hardware) come
+/// before Bluetooth headsets. On this Hackintosh the "Built-in Microphone" is reported as
 /// only falls back to built-in hardware when nothing else is connected. The user can pin
 /// a specific device; that choice is remembered by UID.
 final class AudioDevices {
