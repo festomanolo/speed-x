@@ -14,6 +14,7 @@ struct AudioInputDevice: Identifiable, Hashable {
         transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
     }
     var isBuiltIn: Bool { transport == kAudioDeviceTransportTypeBuiltIn }
+    var isUSB: Bool { transport == kAudioDeviceTransportTypeUSB }
     var isVirtual: Bool { transport == kAudioDeviceTransportTypeVirtual || transport == kAudioDeviceTransportTypeAggregate }
 
     var symbol: String {
@@ -22,7 +23,7 @@ struct AudioInputDevice: Identifiable, Hashable {
         if lower.contains("airpods pro") { return "airpodspro" }
         if lower.contains("airpods") { return "airpods" }
         if isBluetooth { return "headphones" }
-        if transport == kAudioDeviceTransportTypeUSB { return "cable.connector" }
+        if isUSB { return "cable.connector" }
         if isVirtual { return "waveform.circle" }
         return "mic"
     }
@@ -30,10 +31,12 @@ struct AudioInputDevice: Identifiable, Hashable {
 
 /// Enumerates input devices and picks the one Speed-X should listen on.
 ///
-/// On this Hackintosh the "Built-in Microphone" is reported as the default input but
-/// delivers silence, so the automatic choice prefers Bluetooth (AirPods), then USB, and
-/// only falls back to built-in hardware when nothing else is connected. The user can pin
-/// a specific device; that choice is remembered by UID.
+/// Automatic choice works with any microphone: the input selected in macOS wins when it is
+/// a real external device, otherwise wired mics (USB, then other external hardware) come
+/// before Bluetooth headsets. On this Hackintosh the "Built-in Microphone" is reported as
+/// the default input but delivers silence, so built-in hardware is only a last resort and
+/// virtual loopback devices are never picked over a real mic. The user can pin a specific
+/// device; that choice is remembered by UID.
 final class AudioDevices {
     static let shared = AudioDevices()
     static let preferredKey = "SpeedXPreferredInputUID"
@@ -102,10 +105,11 @@ final class AudioDevices {
 
     static func automaticChoice(_ devices: [AudioInputDevice]) -> AudioInputDevice? {
         func rank(_ d: AudioInputDevice) -> Int {
-            if d.isBluetooth { return 0 }
-            if d.transport == kAudioDeviceTransportTypeUSB { return 1 }
-            if !d.isBuiltIn && !d.isVirtual { return 2 }
-            if d.isDefault && !d.isBuiltIn { return 3 }
+            let external = !d.isBuiltIn && !d.isVirtual
+            if d.isDefault && external { return 0 }                  // whatever macOS is set to
+            if d.isUSB { return 1 }
+            if external && !d.isBluetooth { return 2 }                // other wired / Thunderbolt
+            if d.isBluetooth { return 3 }                             // AirPods & headsets
             if d.isBuiltIn { return 4 }
             return 5 // virtual loopback devices (BoomAudio etc.) never carry a voice
         }

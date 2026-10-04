@@ -89,7 +89,7 @@ struct MicrophonePicker: View {
                     Button {
                         model.chooseDevice(uid: nil)
                     } label: {
-                        Label("Automatic (AirPods first)", systemImage: model.preferredDeviceUID == nil ? "checkmark" : "sparkles")
+                        Label("Automatic (any mic)", systemImage: model.preferredDeviceUID == nil ? "checkmark" : "sparkles")
                     }
                     Divider()
                     ForEach(model.inputDevices) { device in
@@ -112,7 +112,7 @@ struct MicrophonePicker: View {
             LevelMeter(level: model.phase == .listening ? model.micLevel : 0, tint: Module.system.tint)
 
             if model.selectedDevice?.isBuiltIn == true {
-                Label("Built-in mic may be silent on this Mac — connect AirPods for voice.", systemImage: "exclamationmark.triangle.fill")
+                Label("Built-in mic may be silent on this Mac — connect a USB mic or AirPods for voice.", systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 10.5))
                     .foregroundStyle(.orange)
             }
