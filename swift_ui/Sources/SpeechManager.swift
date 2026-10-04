@@ -150,7 +150,7 @@ final class SpeechManager: NSObject {
 
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else {
-            fail("No usable microphone. Connect your AirPods or choose an input in System ▸ Microphone.")
+            fail("No usable microphone. Connect a microphone or choose an input in System ▸ Microphone.")
             return
         }
 
