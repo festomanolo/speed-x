@@ -189,13 +189,78 @@ final class SpeechManager: NSObject {
         configObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
         ) { [weak self] _ in
-            self?.stop(.endOfSpeech)
+            self?.restartAudio()
         }
 
         isRecording = true
         onStateChange?(true)
         endpointTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in self?.tick() }
         RunLoop.main.add(endpointTimer!, forMode: .common)
+    }
+
+    private func installTap(on input: AVAudioInputNode, format: AVAudioFormat) {
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            guard let self else { return }
+            self.requestLock.lock()
+            let request = self.liveRequest
+            self.requestLock.unlock()
+            request?.append(buffer)
+            self.measure(buffer)
+        }
+    }
+
+    private func beginRecognition(onDevice: Bool) {
+        guard let recognizer else { return }
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        request.taskHint = .search
+        request.addsPunctuation = false
+        request.contextualStrings = contextualStrings
+        request.requiresOnDeviceRecognition = onDevice
+        usedOnDevice = onDevice
+
+        requestLock.lock()
+        let old = liveRequest
+        liveRequest = request
+        requestLock.unlock()
+        old?.endAudio()
+        task?.cancel()
+
+        self.request = request
+        let id = session
+        self.task = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            DispatchQueue.main.async {
+                guard let self, self.session == id, self.request === request else { return }
+                self.handle(result: result, error: error)
+            }
+        }
+    }
+
+    private func restartAudio() {
+        guard isRecording, let engine else { return }
+        guard audioRestarts < 4 else {
+            stop(heardSpeech ? .endOfSpeech : .error("The microphone keeps changing. Try again, or pick another input in System ▸ Microphone."))
+            return
+        }
+        audioRestarts += 1
+        engine.stop()
+        engine.inputNode.removeTap(onBus: 0)
+        let format = engine.inputNode.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            stop(heardSpeech ? .endOfSpeech : .error("The microphone disconnected."))
+            return
+        }
+        installTap(on: engine.inputNode, format: format)
+        do {
+            engine.prepare()
+            try engine.start()
+        } catch {
+            stop(heardSpeech ? .endOfSpeech : .error("Microphone failed to restart: \(error.localizedDescription)"))
+            return
+        }
+        // Give the new route a moment before deciding it's silent.
+        audioStartedAt = Date()
+        peakRMS = 0
     }
 
     // MARK: - Audio metering
