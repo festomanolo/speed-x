@@ -243,10 +243,24 @@ def _parse_message(raw: str) -> Optional[Dict[str, Any]]:
         # "to manolo" should be a name, not a whole sentence
         if not to or len(to.split()) > 3:
             continue
-        text = (m.group("text") or "").strip(" ,.:\"'“”")
         if pat.endswith("$)$") and text.lower() in ("email", "an email", "a message"):
             continue
-        return {"to": to, "text": text, "app": app}
+        return {"to": to, "text": text.strip(" ,.:\"'“”"), "app": app}
+
+    # No "saying" either: "message john hello there", "tell juma I'll be late" (with an app).
+    m = re.match(
+        r"^(?P<verb>message|msg|whats\s?app|mwambie|imessage|text|tell)\s+(?P<rest>.+)$", body, re.I
+    )
+    if m:
+        loose = m.group("verb").lower() in ("text", "tell")
+        split = _split_name_text(m.group("rest"), allow_guess=not loose or bool(app))
+        if (
+            split
+            and split[1]
+            and (not loose or app or split[1].split()[0].lower() in _MSG_STARTERS)
+        ):
+            to = re.sub(r"^(?:my\s+|the\s+)", "", split[0], flags=re.IGNORECASE)
+            return {"to": to, "text": split[1].strip(" ,.:\"'“”"), "app": app}
     return None
 
 
