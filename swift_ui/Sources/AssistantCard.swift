@@ -163,7 +163,7 @@ struct AssistantCard: View {
     private var controlBar: some View {
         HStack(spacing: 10) {
             Menu {
-                Button("Automatic (AirPods first)") { model.chooseDevice(uid: nil) }
+                Button("Automatic (any mic)") { model.chooseDevice(uid: nil) }
                 Divider()
                 ForEach(model.inputDevices) { device in
                     Button(device.name) { model.chooseDevice(uid: device.uid) }
