@@ -14,6 +14,7 @@ struct AudioInputDevice: Identifiable, Hashable {
         transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
     }
     var isBuiltIn: Bool { transport == kAudioDeviceTransportTypeBuiltIn }
+    var isUSB: Bool { transport == kAudioDeviceTransportTypeUSB }
     var isVirtual: Bool { transport == kAudioDeviceTransportTypeVirtual || transport == kAudioDeviceTransportTypeAggregate }
 
     var symbol: String {
