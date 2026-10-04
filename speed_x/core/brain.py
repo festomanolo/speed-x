@@ -211,9 +211,15 @@ def _split_name_text(rest: str, allow_guess: bool) -> Optional[Tuple[str, str]]:
 
 def _parse_message(raw: str) -> Optional[Dict[str, Any]]:
     """ "send (a whatsapp) message to Manolo saying hi", "text mom that I'm late", "mwambie Juma kwamba nimefika"."""
-    app = _message_app(raw)
-    body = _MSG_APP_RE.sub(" ", raw)
-    body = re.sub(r"\s+", " ", body).strip()
+    body = raw.strip()
+    app = ""
+    opened = _OPEN_MSG_APP_RE.match(body)
+    if opened:
+        app = _message_app(opened.group(1)) or "Messages"
+        body = body[opened.end() :]
+    app = _message_app(body) or app
+    body = _MSG_APP_RE.sub(" ", body)
+    body = re.sub(r"\s+", " ", body).strip(" ,.;:")
     patterns = [
         r"^(?:send|write|tuma|andika)\s+(?:a\s+|an\s+)?(?:(?:whats\s?app|imessage|text|sms)\s+)?(?:message|msg|text|ujumbe|meseji)\s+(?:to|kwa)\s+(?P<to>.+?)(?:\s+"
         + _SAY_RE
@@ -228,6 +234,12 @@ def _parse_message(raw: str) -> Optional[Dict[str, Any]]:
         if not m:
             continue
         to = re.sub(r"^(?:my\s+|the\s+)", "", m.group("to").strip(" ,.:"), flags=re.IGNORECASE)
+        text = (m.group("text") or "").strip(" ,.:\"'“”")
+        if not text and pat is patterns[0]:
+            # No "saying": "send a message to manolo hi how are you".
+            split = _split_name_text(to, allow_guess=True)
+            if split:
+                to, text = split
         # "to manolo" should be a name, not a whole sentence
         if not to or len(to.split()) > 3:
             continue
