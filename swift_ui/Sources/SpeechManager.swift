@@ -3,7 +3,7 @@ import AudioToolbox
 import Foundation
 import Speech
 
-/// Streams the selected microphone (AirPods first, see AudioDevices) into on-device
+/// Streams the selected microphone (any mic; see AudioDevices for the automatic order) into on-device
 /// speech recognition and decides when the user has finished speaking.
 ///
 /// Endpointing: once speech has been heard, the command is committed after
@@ -136,7 +136,7 @@ final class SpeechManager: NSObject {
         let engine = AVAudioEngine()
         let input = engine.inputNode
 
-        // Route the engine to the chosen device (AirPods) instead of the broken built-in mic.
+        // Route the engine to the chosen device (USB mic, AirPods…) instead of the silent built-in mic.
         let device = AudioDevices.shared.selectedDevice()
         if let device, let unit = input.audioUnit {
             var id = device.id
@@ -150,7 +150,7 @@ final class SpeechManager: NSObject {
 
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else {
-            fail("No usable microphone. Connect your AirPods or choose an input in System ▸ Microphone.")
+            fail("No usable microphone. Connect a microphone or choose an input in System ▸ Microphone.")
             return
         }
 
@@ -331,7 +331,7 @@ final class SpeechManager: NSObject {
         } else {
             if now.timeIntervalSince(audioStartedAt) > 3.0 && peakRMS < 0.000_05 {
                 let name = activeDeviceName ?? "the microphone"
-                stop(.error("No audio coming from \(name). Connect your AirPods or pick another input."))
+                stop(.error("No audio coming from \(name). Check that it's switched on and unmuted, or pick another input."))
                 return
             }
             if elapsed > noSpeechTimeout { stop(.cancelled); return }
