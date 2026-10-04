@@ -181,3 +181,33 @@ class TestNewRules(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestWhatsAppScript(unittest.TestCase):
+    def setUp(self):
+        from speed_x.tools import messaging
+
+        self.tool = messaging.MessagingTool()
+        self.scripts = []
+        self.tool._run_applescript = lambda s, timeout=8.0: self.scripts.append(s) or "ok"
+        patcher = mock.patch.object(messaging, "app_installed", lambda name: True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_name_and_text_pasted_only_after_clipboard_holds_them(self):
+        res = self.tool.execute("send", {"to": "manolo", "text": 'hi "there"', "app": "WhatsApp"})
+        self.assertTrue(res.success, res.message)
+        script = self.scripts[0]
+        # Each value goes through the verified clipboard helper, never a raw set+paste.
+        self.assertIn('my pasteInto("manolo")', script)
+        self.assertIn('my pasteInto("hi \\"there\\"")', script)
+        self.assertIn("if (the clipboard as text) is value then return", script)
+        self.assertNotIn('set the clipboard to "', script)
+        # The user's clipboard comes back even when automation fails.
+        self.assertEqual(script.count("set the clipboard to previousClipboard"), 2)
+
+    def test_missing_text_asks_instead_of_sending(self):
+        res = self.tool.execute("send", {"to": "manolo", "text": "", "app": "WhatsApp"})
+        self.assertFalse(res.success)
+        self.assertIn("What should I say", res.message)
+        self.assertEqual(self.scripts, [])

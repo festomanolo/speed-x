@@ -17,7 +17,7 @@ import re
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..config import DEFAULT_COMPUTE_UNITS, DEFAULT_MODEL_DIR, is_apple_silicon
 from ..tools.apps import normalize_app_name, resolve_app
@@ -117,11 +117,109 @@ def _message_app(text: str) -> str:
     return ""
 
 
+# "open whatsapp (and) send …" / "fungua whatsapp, tuma …": the app to use, said up front.
+_OPEN_MSG_APP_RE = re.compile(
+    r"^(?:open|launch|start|go to|fungua)\s+(?:the\s+)?(whats\s?app|imessage|messages)(?:\s+app)?\b[\s,.;:]*"
+    r"(?:(?:and then|and|then|na|halafu|alafu|kisha)\b\s*)?",
+    re.IGNORECASE,
+)
+# Words a spoken message usually starts with, used to find where the name ends when the
+# user didn't say "saying": "message john hello there", "send a message to mama I'm late".
+_MSG_STARTERS = {
+    "hi",
+    "hello",
+    "hey",
+    "yo",
+    "habari",
+    "mambo",
+    "niaje",
+    "vipi",
+    "shikamoo",
+    "salaam",
+    "salam",
+    "good",
+    "i",
+    "i'm",
+    "im",
+    "i'll",
+    "ill",
+    "i've",
+    "i'd",
+    "we",
+    "we're",
+    "we'll",
+    "you",
+    "you're",
+    "are",
+    "can",
+    "could",
+    "will",
+    "would",
+    "please",
+    "call",
+    "come",
+    "where",
+    "when",
+    "what",
+    "how",
+    "why",
+    "did",
+    "do",
+    "don't",
+    "dont",
+    "let's",
+    "lets",
+    "see",
+    "thanks",
+    "thank",
+    "happy",
+    "sorry",
+    "ok",
+    "okay",
+    "yes",
+    "no",
+    "meet",
+    "nimefika",
+    "nipo",
+    "naja",
+    "nakuja",
+    "nitachelewa",
+    "asante",
+    "pole",
+    "karibu",
+    "is",
+    "it's",
+    "its",
+}
+_NOT_RECIPIENTS = {"me", "us", "a", "an", "the", "about", "him", "her", "them", "it", "size"}
+
+
+def _split_name_text(rest: str, allow_guess: bool) -> Optional[Tuple[str, str]]:
+    """'john hello there' -> ('john', 'hello there'); 'festo manolo' -> ('festo manolo', '')."""
+    words = rest.split()
+    if not words or words[0].lower().strip(",.:") in _NOT_RECIPIENTS:
+        return None
+    for i in range(1, min(len(words), 4)):
+        if words[i].lower().strip(",.:") in _MSG_STARTERS:
+            return " ".join(words[:i]), " ".join(words[i:])
+    if len(words) <= 2:
+        return rest, ""
+    if not allow_guess:
+        return None
+    return words[0], " ".join(words[1:])
+
+
 def _parse_message(raw: str) -> Optional[Dict[str, Any]]:
     """ "send (a whatsapp) message to Manolo saying hi", "text mom that I'm late", "mwambie Juma kwamba nimefika"."""
-    app = _message_app(raw)
-    body = _MSG_APP_RE.sub(" ", raw)
-    body = re.sub(r"\s+", " ", body).strip()
+    body = raw.strip()
+    app = ""
+    opened = _OPEN_MSG_APP_RE.match(body)
+    if opened:
+        app = _message_app(opened.group(1)) or "Messages"
+        body = body[opened.end() :]
+    app = _message_app(body) or app
+    body = _MSG_APP_RE.sub(" ", body)
+    body = re.sub(r"\s+", " ", body).strip(" ,.;:")
     patterns = [
         r"^(?:send|write|tuma|andika)\s+(?:a\s+|an\s+)?(?:(?:whats\s?app|imessage|text|sms)\s+)?(?:message|msg|text|ujumbe|meseji)\s+(?:to|kwa)\s+(?P<to>.+?)(?:\s+"
         + _SAY_RE
@@ -136,13 +234,33 @@ def _parse_message(raw: str) -> Optional[Dict[str, Any]]:
         if not m:
             continue
         to = re.sub(r"^(?:my\s+|the\s+)", "", m.group("to").strip(" ,.:"), flags=re.IGNORECASE)
+        text = (m.group("text") or "").strip(" ,.:\"'“”")
+        if not text and pat is patterns[0]:
+            # No "saying": "send a message to manolo hi how are you".
+            split = _split_name_text(to, allow_guess=True)
+            if split:
+                to, text = split
         # "to manolo" should be a name, not a whole sentence
         if not to or len(to.split()) > 3:
             continue
-        text = (m.group("text") or "").strip(" ,.:\"'“”")
         if pat.endswith("$)$") and text.lower() in ("email", "an email", "a message"):
             continue
-        return {"to": to, "text": text, "app": app}
+        return {"to": to, "text": text.strip(" ,.:\"'“”"), "app": app}
+
+    # No "saying" either: "message john hello there", "tell juma I'll be late" (with an app).
+    m = re.match(
+        r"^(?P<verb>message|msg|whats\s?app|mwambie|imessage|text|tell)\s+(?P<rest>.+)$", body, re.I
+    )
+    if m:
+        loose = m.group("verb").lower() in ("text", "tell")
+        split = _split_name_text(m.group("rest"), allow_guess=not loose or bool(app))
+        if (
+            split
+            and split[1]
+            and (not loose or app or split[1].split()[0].lower() in _MSG_STARTERS)
+        ):
+            to = re.sub(r"^(?:my\s+|the\s+)", "", split[0], flags=re.IGNORECASE)
+            return {"to": to, "text": split[1].strip(" ,.:\"'“”"), "app": app}
     return None
 
 

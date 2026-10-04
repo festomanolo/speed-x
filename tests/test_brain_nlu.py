@@ -158,6 +158,42 @@ class TestBrain(unittest.TestCase):
         d = self.brain.decide("send hi to manolo on whatsapp")
         self.assertEqual((d.params["to"], d.params["app"]), ("manolo", "WhatsApp"))
 
+    def test_open_whatsapp_then_message_without_and_or_saying(self):
+        cases = {
+            "open whatsapp send message to manolo saying hi": ("manolo", "hi"),
+            "Open WhatsApp. Send message to Manolo saying hi.": ("Manolo", "hi"),
+            "open whatsapp and send a message to manolo hi how are you": (
+                "manolo",
+                "hi how are you",
+            ),
+            "open whatsapp then message john hello there": ("john", "hello there"),
+            "open whatsapp and tell john I'll be late": ("john", "I'll be late"),
+            "fungua whatsapp tuma ujumbe kwa juma kwamba nimefika": ("juma", "nimefika"),
+        }
+        for phrase, (to, text) in cases.items():
+            with self.subTest(phrase=phrase):
+                steps = self.router.preview(phrase)
+                self.assertEqual([(d.domain, d.action) for d in steps], [("messaging", "send")])
+                self.assertEqual(
+                    (steps[0].params["to"], steps[0].params["text"], steps[0].params["app"]),
+                    (to, text, "WhatsApp"),
+                )
+
+    def test_message_name_and_text_without_saying(self):
+        d = self.brain.decide("message john hello")
+        self.assertEqual(
+            (d.domain, d.params["to"], d.params["text"]), ("messaging", "john", "hello")
+        )
+        d = self.brain.decide("send message to Festo Manolo hello")
+        self.assertEqual((d.params["to"], d.params["text"]), ("Festo Manolo", "hello"))
+        d = self.brain.decide("open whatsapp send message to manolo")
+        self.assertEqual(
+            (d.params["to"], d.params["text"], d.params["app"]), ("manolo", "", "WhatsApp")
+        )
+        # Not messages:
+        self.assertNotEqual(self.brain.decide("tell me a joke").domain, "messaging")
+        self.assertNotEqual(self.brain.decide("tell john about the meeting").domain, "messaging")
+
     def test_sentence_is_never_an_app_name(self):
         d = self.brain.decide("open whatsapp and send message to manolo saying hi please now")
         self.assertNotEqual(
