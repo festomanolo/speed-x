@@ -136,7 +136,7 @@ final class SpeechManager: NSObject {
         let engine = AVAudioEngine()
         let input = engine.inputNode
 
-        // Route the engine to the chosen device (AirPods) instead of the broken built-in mic.
+        // Route the engine to the chosen device (USB mic, AirPods…) instead of the silent built-in mic.
         let device = AudioDevices.shared.selectedDevice()
         if let device, let unit = input.audioUnit {
             var id = device.id
