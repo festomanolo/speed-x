@@ -168,13 +168,10 @@ final class SpeechManager: NSObject {
         audioRestarts = 0
         retriedServer = false
         startedAt = Date()
+        audioStartedAt = Date()
         lastPartialAt = Date()
 
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self, weak request] buffer, _ in
-            request?.append(buffer)
-            self?.measure(buffer)
-        }
-
+        installTap(on: input, format: format)
         do {
             engine.prepare()
             try engine.start()
