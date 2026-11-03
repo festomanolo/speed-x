@@ -284,11 +284,53 @@ class RemoteAppleScript:
 
 
 # Ops that never touch AppleScript and can run while a command is executing.
-INSTANT_OPS = {"preview", "status"}
+INSTANT_OPS = {"preview", "status", "dictate", "meeting_line", "dictionary"}
+
+
+def _meeting_recap(transcript: str) -> Optional[str]:
+    """A short written recap, only when a model is already up (never blocks on a cold load)."""
+    st = ai.status()
+    if st.get("local_llm") != "ready" and st.get("cloud_llm") != "ready":
+        return None
+    return ai.stream(
+        "You write concise meeting recaps: 3-5 plain sentences, no preamble.",
+        "Recap this meeting transcript:\n" + transcript[-6000:],
+    )
+
+
+def _wire_features(engine: "Engine") -> None:
+    """Start routines, give the agent tool its runner, and do the daily update check."""
+    from .tools.base import registry
+
+    meetings._recap = _meeting_recap
+    agent_tool = registry.get("agents")
+    if agent_tool is not None:
+        agent_tool.runner = engine.run_agent
+    # Routines are queued like any command so AppleScript still runs one thing at a time.
+    Scheduler(routines, lambda r: _queue_routine(engine, r)).start()
+    if os.getenv("SPEEDX_UPDATE_CHECK", "1") == "1" and os.getenv("SPEEDX_HOSTED") == "1":
+        threading.Thread(target=_daily_update_check, daemon=True).start()
+
+
+_routine_queue: "Optional[queue.Queue]" = None
+
+
+def _queue_routine(engine: "Engine", routine: Dict[str, Any]) -> None:
+    if _routine_queue is not None:
+        _routine_queue.put({"op": "routine", "routine": routine})
+
+
+def _daily_update_check() -> None:
+    time.sleep(20)
+    while True:
+        info = check_update()
+        if info.get("newer"):
+            events.emit("update_available", version=info["latest"], page=info["page"])
+        time.sleep(24 * 3600)
 
 
 def main():
-    global _out
+    global _out, _routine_queue
     # Tools must never write to our protocol channel.
     _out = os.fdopen(os.dup(sys.stdout.fileno()), "w", buffering=1)
     sys.stdout = sys.stderr
@@ -304,14 +346,19 @@ def main():
         set_remote_runner(remote)
     else:
         warm_up()
+    work: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue()
+    _routine_queue = work
     engine.router.brain.warm_async()
     ai.warm_async()
+    _wire_features(engine)
     threading.Thread(target=_status_pump, args=(engine,), daemon=True).start()
 
-    work: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue()
 
     def execute(req: Dict[str, Any]):
         try:
+            if req.get("op") == "routine":
+                engine.run_routine(req["routine"])
+                return
             resp = engine.handle(req)
         except Exception as e:  # keep the daemon alive no matter what
             resp = {
