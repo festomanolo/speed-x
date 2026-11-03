@@ -11,6 +11,9 @@ Requests  (UI -> engine):
     {"id": 4, "op": "preview", "cmd": "set a timer for te"}
     {"id": 5, "op": "status"}
     {"id": 6, "op": "set_coreml", "enabled": true}
+    {"id": 7, "op": "dictate", "text": "um so new line hello"}      # -> {"text": "Hello"} cleaned for typing
+    {"id": 8, "op": "meeting_line", "text": "we agreed to ship friday"}
+    {"id": 9, "op": "dictionary"}                                    # -> {"hints": [...]}
 
 Responses carry the same "id". Unsolicited events have an "event" key instead.
 """
@@ -24,7 +27,12 @@ import time
 from typing import Any, Dict, Optional
 
 from .core import ai, events
+from .core import dictation as dictation_mod
+from .core.agents import Agent
 from .core.context import context_engine
+from .core.meeting import meetings
+from .core.routines import Scheduler, routines
+from .core.updater import check as check_update
 from .core.osa import AppleScriptError, set_remote_runner, warm_up
 from .core.router import CommandRouter, describe
 
@@ -90,6 +98,7 @@ class Engine:
             "compute_units": brain.compute_units,
             **ai.status(),
             "pending": self.pending,
+            "meeting_active": meetings.active,
         }
 
     def _respond(self, rid, resp, latency_ms: float, command: str) -> Dict[str, Any]:
@@ -157,6 +166,36 @@ class Engine:
             "latency_ms": round((time.perf_counter() - start) * 1000, 2),
         }
 
+    # -- background agents & routines (run through the router, never auto-confirm) -----------
+    def run_agent(self, command: str, agent: Agent) -> None:
+        agent.status = "running"
+        resp = self.router.process(command)
+        if agent.cancel.is_set():
+            agent.status = "stopped"
+            return
+        agent.steps = [
+            {"label": s.decision.domain + "." + s.decision.action, "success": s.success, "message": s.message}
+            for s in resp.steps
+        ]
+        agent.message = resp.message
+        if resp.needs_confirmation:
+            agent.status = "needs_approval"
+            agent.message = f"Needs your OK, so I stopped: {resp.confirmation_prompt}"
+        else:
+            agent.status = "done" if resp.success else "failed"
+
+    def run_routine(self, routine: Dict[str, Any]) -> None:
+        resp = self.router.process(routine["command"])
+        message = (
+            f"Skipped (needs your OK): {resp.confirmation_prompt}" if resp.needs_confirmation else resp.message
+        )
+        events.emit(
+            "routine_done",
+            command=routine["command"],
+            success=bool(resp.success) and not resp.needs_confirmation,
+            message=message,
+        )
+
     def handle(self, req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         rid = req.get("id")
         op = req.get("op", "run")
@@ -183,6 +222,15 @@ class Engine:
                 KEY_FILE.unlink()
             cloud_llm.available()
             return {"id": rid, **self.status()}
+        if op == "dictate":
+            raw = str(req.get("text", ""))
+            text = dictation_mod.cleanup(raw, dictation_mod.dictionary)
+            stats = dictation_mod.record(text) if text.strip() else dictation_mod.read_stats()
+            return {"id": rid, "success": True, "text": text, "words": len(text.split()), **stats}
+        if op == "meeting_line":
+            return {"id": rid, "success": meetings.add_line(str(req.get("text", ""))), "active": meetings.active}
+        if op == "dictionary":
+            return {"id": rid, "success": True, "hints": dictation_mod.dictionary.hints()}
         if op == "set_coreml":
             self.router.brain.set_coreml_enabled(bool(req.get("enabled")))
             return {"id": rid, **self.status()}
