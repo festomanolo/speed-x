@@ -251,7 +251,9 @@ class CommandRouter:
             return []
         return self.brain.plan(prompt, commit=False, allow_llm=False)
 
-    def process(self, prompt: str, confirmed: bool = False) -> ExecutionResponse:
+    def process(
+        self, prompt: str, confirmed: bool = False, use_skills: bool = True
+    ) -> ExecutionResponse:
         prompt = prompt.strip()
         if not prompt:
             return ExecutionResponse(
@@ -261,7 +263,7 @@ class CommandRouter:
             )
 
         # 1. Plan (one or more typed decisions)
-        steps = self.brain.plan(prompt, commit=False)  # context is committed below, once
+        steps, replay_key, kind = self._plan(prompt, use_skills)  # context is committed below, once
         first = steps[0]
 
         # 2. Nothing actionable: offer the closest known command instead of a dead end
@@ -330,6 +332,20 @@ class CommandRouter:
             )
             if not tool_result.success and len(steps) > 1:
                 break  # don't run later steps on top of a failed one
+
+        # Learn & replay: a replay that failed is struck (and the planner redoes it);
+        # a fresh multi-step / AI-planned success is remembered for next time.
+        succeeded = all(r.success for r in results) and len(results) == len(steps)
+        if kind == "skill" and replay_key:
+            if succeeded:
+                skills.mark_used(replay_key)
+            else:
+                skills.mark_failed(replay_key)
+                return self.process(prompt, confirmed=confirmed, use_skills=False)
+        elif kind == "brain" and succeeded:
+            learnable = self._learnable(steps)
+            if learnable and skills.learn(prompt, learnable):
+                events.emit("skill_learned", command=prompt)
 
         # 5. Persistent memory
         memory.log_command(
