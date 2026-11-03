@@ -29,8 +29,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(appActivated(_:)), name: NSWorkspace.didActivateApplicationNotification, object: nil)
         model.lastExternalApp = NSWorkspace.shared.frontmostApplication?.localizedName
 
-        SpeechManager.shared.requestPermissions { granted in
-            if granted { SpeechManager.shared.prewarm() }
+        DictationController.shared.install()
+        if OnboardingWindow.needed {
+            OnboardingWindow.shared.show()
+        } else {
+            SpeechManager.shared.requestPermissions { granted in
+                if granted { SpeechManager.shared.prewarm() }
+            }
         }
 
         if !UserDefaults.standard.bool(forKey: "SpeedXLoginConfigured") {
@@ -123,6 +128,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             toggleNotch()
             return
         }
+        if id == HotKeyManager.dictateID {
+            DictationController.shared.toggle()
+            return
+        }
         if !model.isShown { withAnimation(Motion.emerge) { model.show() } }
         if id == HotKeyManager.voiceID {
             if model.phase == .listening {
@@ -158,7 +167,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // MARK: - URL scheme: speedx://open/<engine|system|assistant>, speedx://listen, speedx://run?cmd=…, speedx://close,
-    //         speedx://toggle, speedx://show, speedx://hide
+    //         speedx://toggle, speedx://show, speedx://hide, speedx://onboarding
 
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
@@ -192,6 +201,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 withAnimation(Motion.standard) { model.open(.assistant, pin: true) }
             case "close":
                 withAnimation(Motion.standard) { model.close() }
+            case "onboarding":
+                OnboardingWindow.shared.show()
             default:
                 break
             }
