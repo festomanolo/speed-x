@@ -9,6 +9,8 @@ from . import events
 from .brain import IntentDecision, LayaBrain
 from .guardrails import guardrails
 from .memory import memory
+from . import meta
+from .skills import skills
 
 
 @dataclass
@@ -91,6 +93,34 @@ ACTION_LABELS = {
     ("timer", "cancel"): "Cancel timers",
     ("timer", "time"): "Time",
     ("timer", "date"): "Date",
+    ("skills", "teach"): "Learn shortcut",
+    ("skills", "forget"): "Forget shortcut",
+    ("skills", "list"): "Shortcuts",
+    ("routines", "add"): "New routine",
+    ("routines", "list"): "Routines",
+    ("routines", "remove"): "Remove routine",
+    ("dictation", "add_word"): "Add to dictionary",
+    ("dictation", "add_replace"): "Dictionary rule",
+    ("dictation", "remove"): "Remove from dictionary",
+    ("dictation", "list"): "Dictionary",
+    ("dictation", "stats"): "Dictation stats",
+    ("meeting", "start"): "Start meeting notes",
+    ("meeting", "stop"): "End meeting",
+    ("meeting", "note"): "Meeting note",
+    ("meeting", "last"): "Last meeting",
+    ("meeting", "list"): "Meetings",
+    ("update", "check"): "Check for updates",
+    ("update", "install"): "Install update",
+    ("agents", "start"): "Background agent",
+    ("agents", "list"): "Agents",
+    ("agents", "stop"): "Stop agents",
+    ("ui", "show_where"): "Show me where",
+    ("ui", "draw_start"): "Start drawing",
+    ("ui", "draw_stop"): "Stop drawing",
+    ("ui", "draw_clear"): "Clear drawing",
+    ("ui", "wake_on"): "Wake word on",
+    ("ui", "wake_off"): "Wake word off",
+    ("ui", "permissions"): "Permissions",
 }
 
 
@@ -140,6 +170,45 @@ class CommandRouter:
 
     def __init__(self, brain: Optional[LayaBrain] = None):
         self.brain = brain or LayaBrain()
+        skills_tool = registry.get("skills")
+        if skills_tool is not None:
+            skills_tool.planner = lambda text: self.brain.plan(text, commit=False)
+
+    def _plan(self, prompt: str, use_skills: bool):
+        """-> (steps, replay_key, kind). kind: 'meta' | 'skill' | 'brain'."""
+        found = meta.match(prompt)
+        if found:
+            return found, None, "meta"
+        if use_skills:
+            hit = skills.find(prompt)
+            if hit:
+                steps = [
+                    IntentDecision(s["domain"], s["action"], dict(s["params"]), 1.0, False, "skill", prompt)
+                    for s in hit.steps
+                ]
+                return steps, hit.key, "skill"
+        return self.brain.plan(prompt, commit=False), None, "brain"
+
+    @staticmethod
+    def _learnable(steps: List[IntentDecision]) -> List[Dict[str, Any]]:
+        """Steps worth remembering, or [] (single plain rule hits are already instant)."""
+        if not steps or not all(d.handled for d in steps):
+            return []
+        planned = len(steps) > 1 or any(d.source == "llm" for d in steps)
+        if not planned:
+            return []
+        out = []
+        for d in steps:
+            sensitive, _ = guardrails.requires_confirmation(d.domain, d.action)
+            out.append(
+                {
+                    "domain": d.domain,
+                    "action": d.action,
+                    "params": dict(d.params),
+                    "confirm": bool(sensitive or d.requires_confirmation),
+                }
+            )
+        return out
 
     def _assistant_step(self, d: IntentDecision, previous: List[StepResult]) -> ToolResult:
         from . import ai
@@ -182,7 +251,9 @@ class CommandRouter:
             return []
         return self.brain.plan(prompt, commit=False, allow_llm=False)
 
-    def process(self, prompt: str, confirmed: bool = False) -> ExecutionResponse:
+    def process(
+        self, prompt: str, confirmed: bool = False, use_skills: bool = True
+    ) -> ExecutionResponse:
         prompt = prompt.strip()
         if not prompt:
             return ExecutionResponse(
@@ -192,7 +263,7 @@ class CommandRouter:
             )
 
         # 1. Plan (one or more typed decisions)
-        steps = self.brain.plan(prompt, commit=False)  # context is committed below, once
+        steps, replay_key, kind = self._plan(prompt, use_skills)  # context is committed below, once
         first = steps[0]
 
         # 2. Nothing actionable: offer the closest known command instead of a dead end
@@ -261,6 +332,20 @@ class CommandRouter:
             )
             if not tool_result.success and len(steps) > 1:
                 break  # don't run later steps on top of a failed one
+
+        # Learn & replay: a replay that failed is struck (and the planner redoes it);
+        # a fresh multi-step / AI-planned success is remembered for next time.
+        succeeded = all(r.success for r in results) and len(results) == len(steps)
+        if kind == "skill" and replay_key:
+            if succeeded:
+                skills.mark_used(replay_key)
+            else:
+                skills.mark_failed(replay_key)
+                return self.process(prompt, confirmed=confirmed, use_skills=False)
+        elif kind == "brain" and succeeded:
+            learnable = self._learnable(steps)
+            if learnable and skills.learn(prompt, learnable):
+                events.emit("skill_learned", command=prompt)
 
         # 5. Persistent memory
         memory.log_command(

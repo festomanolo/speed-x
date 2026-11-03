@@ -41,6 +41,21 @@ struct EngineResponse: Codable {
     let osa_id: Int?
     let script: String?
     let timeout: Double?
+    // features (events and ops added with dictation / meetings / agents / updates)
+    var query: String? = nil
+    var hints: [String]? = nil
+    var words: Int? = nil
+    var today: Int? = nil
+    var total: Int? = nil
+    var active: Bool? = nil
+    var title: String? = nil
+    var version: String? = nil
+    var page: String? = nil
+    var meeting_active: Bool? = nil
+    var agent_id: Int? = nil
+    var status: String? = nil
+    var lines: [String]? = nil
+    var elapsed: Double? = nil
 }
 
 /// Talks to the warm `python -m speed_x.server` daemon over JSON lines.
@@ -206,6 +221,15 @@ final class EngineClient {
     func setCoreML(_ enabled: Bool, completion: @escaping (EngineResponse) -> Void) {
         send(["op": "set_coreml", "enabled": enabled], completion: completion)
     }
+
+    /// Clean raw dictated text (fillers, spoken punctuation, personal dictionary) → text to type.
+    func dictate(_ text: String, completion: @escaping (EngineResponse) -> Void) {
+        send(["op": "dictate", "text": text], completion: completion)
+    }
+
+    func meetingLine(_ text: String) { send(["op": "meeting_line", "text": text], completion: nil) }
+
+    func dictionary(completion: @escaping (EngineResponse) -> Void) { send(["op": "dictionary"], completion: completion) }
 
     func shutdown() {
         process?.terminationHandler = nil

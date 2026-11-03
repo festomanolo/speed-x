@@ -23,7 +23,7 @@ struct SystemCard: View {
             CardSection(title: "Shortcuts") {
                 ShortcutRow(keys: "⌥ Space", label: "Talk to Speed-X")
                 ShortcutRow(keys: "⌘ ⇧ Space", label: "Type a command")
-                ShortcutRow(keys: "esc", label: "Dismiss")
+                ShortcutRow(keys: "fn  /  ⌥ ⇧ Space", label: "Dictate into any field")
                 Divider().opacity(0.4)
                 Toggle(isOn: Binding(
                     get: { model.launchAtLogin },
@@ -34,6 +34,27 @@ struct SystemCard: View {
                 .toggleStyle(.switch)
                 .controlSize(.small)
                 .tint(Module.system.tint)
+            }
+
+            CardSection(title: "Assistant") {
+                Toggle(isOn: Binding(get: { model.wakeWordOn }, set: { model.setWakeWord($0) })) {
+                    Text("Wake word “Speed X”").font(.system(size: 12.5, weight: .medium))
+                }
+                .toggleStyle(.switch).controlSize(.small).tint(Module.system.tint)
+                Toggle(isOn: Binding(get: { model.dictationOn }, set: { model.setDictation($0) })) {
+                    Text("Dictation (fn)").font(.system(size: 12.5, weight: .medium))
+                }
+                .toggleStyle(.switch).controlSize(.small).tint(Module.system.tint)
+                Divider().opacity(0.4)
+                HStack(spacing: 8) {
+                    Button(model.meetingActive ? "End meeting" : "Meeting notes") { model.toggleMeeting() }
+                    Button("Permissions") { OnboardingWindow.shared.show() }
+                    if let v = model.updateVersion {
+                        Button("Update \(v)") { model.installUpdate() }.tint(.orange)
+                    }
+                }
+                .controlSize(.small)
+                .font(.system(size: 11.5, weight: .medium))
             }
         }
         .padding(16)

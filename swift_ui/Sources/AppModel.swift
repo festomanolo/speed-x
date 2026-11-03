@@ -85,6 +85,12 @@ final class AppModel {
     var preferredDeviceUID: String? = AudioDevices.shared.preferredUID
     var launchAtLogin = LaunchAtLoginManager.shared.isEnabled
 
+    // Assistant features
+    var wakeWordOn = WakeWordListener.shared.enabled
+    var dictationOn = DictationController.shared.enabled
+    var meetingActive = false
+    var updateVersion: String?
+
     /// Last app the user was in before Speed-X (for "close it").
     var lastExternalApp: String?
 
@@ -95,6 +101,50 @@ final class AppModel {
         AudioDevices.shared.onChange = { [weak self] in self?.refreshDevices() }
         wireSpeech()
         wireEngine()
+        WakeWordListener.shared.onWake = { [weak self] in self?.wakeUp() }
+    }
+
+    // MARK: - Assistant features
+
+    /// "Speed X" was heard.
+    func wakeUp() {
+        guard phase != .listening, !SpeechManager.shared.isRecording else { return }
+        if !isShown { isShown = true }
+        startListening()
+        withAnimation(Motion.standard) { open(.assistant, pin: true) }
+    }
+
+    func setWakeWord(_ on: Bool) {
+        let ok = WakeWordListener.shared.setEnabled(on)
+        if on, !ok {
+            errorMessage = "The wake word needs Microphone and Speech Recognition access, and on-device speech recognition (so audio never leaves this Mac)."
+        }
+        wakeWordOn = WakeWordListener.shared.enabled
+    }
+
+    func setDictation(_ on: Bool) {
+        DictationController.shared.enabled = on
+        dictationOn = on
+    }
+
+    func toggleMeeting() { submit(meetingActive ? "end meeting" : "start meeting") }
+    func installUpdate() { submit("install the update") }
+
+    private func note(_ text: String, ok: Bool = true) {
+        history.insert(HistoryItem(command: text, success: ok, summary: "", latencyMs: 0), at: 0)
+        if history.count > 12 { history.removeLast() }
+    }
+
+    private func handleUI(_ action: String?) {
+        switch action {
+        case "draw_start": PenOverlay.shared.start()
+        case "draw_stop": PenOverlay.shared.stop()
+        case "draw_clear": PenOverlay.shared.clear()
+        case "wake_on": setWakeWord(true)
+        case "wake_off": setWakeWord(false)
+        case "permissions": OnboardingWindow.shared.show()
+        default: break
+        }
     }
 
     // MARK: - Derived values for the dock gauges
@@ -174,13 +224,18 @@ final class AppModel {
         let speech = SpeechManager.shared
         speech.onStateChange = { [weak self] recording in
             guard let self else { return }
+            WakeWordListener.shared.setBusy(recording)
+            if SpeechManager.shared.dictationMode { return }   // dictation has its own pill
             if recording {
                 self.phase = .listening
             } else if self.phase == .listening {
                 self.phase = self.response?.needs_confirmation == true ? .confirming : .idle
             }
         }
-        speech.onLevel = { [weak self] level in self?.micLevel = Double(level) }
+        speech.onLevel = { [weak self] level in
+            self?.micLevel = Double(level)
+            DictationState.shared.level = Double(level)
+        }
         speech.onPartial = { [weak self] text in
             self?.transcript = text
             self?.schedulePreview(text)
@@ -190,6 +245,7 @@ final class AppModel {
             self?.submit(text)
         }
         speech.onError = { [weak self] message in
+            if SpeechManager.shared.dictationMode { DictationState.shared.notice = message; return }
             self?.errorMessage = message
             self?.phase = .idle
         }
@@ -302,6 +358,8 @@ final class AppModel {
             case "ready":
                 self.engineReady = true
                 self.applyStatus(event)
+                EngineClient.shared.dictionary { SpeechManager.shared.addVocabulary($0.hints ?? []) }
+                WakeWordListener.shared.restoreOnLaunch()
             case "status":
                 self.applyStatus(event)
             case "stream":
@@ -309,6 +367,33 @@ final class AppModel {
             case "timer_done":
                 NSSound(named: "Glass")?.play()
                 self.history.insert(HistoryItem(command: "⏰ \(event.label ?? "Timer")", success: true, summary: "Timer finished", latencyMs: 0), at: 0)
+            case "ui":
+                self.handleUI(event.action)
+            case "show_where":
+                ScreenGuide.shared.show(query: event.query ?? "", in: self.lastExternalApp) { [weak self] problem in
+                    if let problem { self?.errorMessage = problem }
+                }
+            case "agent_update":
+                AgentCenter.shared.update(event)
+            case "meeting_state":
+                self.meetingActive = event.active ?? false
+                if self.meetingActive {
+                    if !MeetingCapture.shared.start() {
+                        self.errorMessage = "Meeting notes need on-device speech recognition and microphone access."
+                        EngineClient.shared.run("end meeting", frontApp: nil) { _ in }
+                    }
+                } else {
+                    MeetingCapture.shared.stop()
+                }
+            case "dictionary_changed":
+                SpeechManager.shared.addVocabulary(event.hints ?? [])
+            case "update_available":
+                self.updateVersion = event.version
+            case "routine_done":
+                NSSound(named: "Glass")?.play()
+                self.note("⏱ \(event.command ?? "Routine") — \(event.message ?? "")", ok: event.success ?? true)
+            case "skill_learned":
+                self.note("🧠 Learned “\(event.command ?? "")” — it will run instantly next time")
             default:
                 break
             }

@@ -27,7 +27,14 @@ final class SpeechManager: NSObject {
     /// Seconds of silence after speech that ends the command.
     var silenceWindow: TimeInterval = 0.8
     private let noSpeechTimeout: TimeInterval = 7.0
-    private let maxDuration: TimeInterval = 20.0
+    private var maxDuration: TimeInterval { dictationMode ? 180.0 : 20.0 }
+
+    /// Dictation: the user holds a key (or toggles) to talk, so silence never ends the session and the
+    /// text goes to `dictationHandler` instead of being run as a command.
+    var dictationMode = false
+    var dictationHandler: ((String) -> Void)?
+    /// Called on every partial while dictating (for the HUD).
+    var onDictationPartial: ((String) -> Void)?
 
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private var engine: AVAudioEngine?
@@ -65,6 +72,12 @@ final class SpeechManager: NSObject {
         "andika note", "tuma email", "tafuta", "nikumbushe", "saa ngapi", "dakika", "weka timer", "anza coding",
         "volume up", "volume down", "set a timer", "remind me", "take a screenshot", "read my screen", "clipboard",
     ]
+
+    /// Personal-dictionary words are vocabulary hints too (names, jargon).
+    func addVocabulary(_ words: [String]) {
+        let known = Set(contextualStrings)
+        contextualStrings += words.filter { !known.contains($0) }
+    }
 
     func requestPermissions(completion: @escaping (Bool) -> Void) {
         SFSpeechRecognizer.requestAuthorization { status in
@@ -293,7 +306,7 @@ final class SpeechManager: NSObject {
                 transcript = text
                 heardSpeech = true
                 lastPartialAt = Date()
-                onPartial?(text)
+                if dictationMode { onDictationPartial?(text) } else { onPartial?(text) }
             }
             if result.isFinal { stop(.endOfSpeech); return }
         }
@@ -321,6 +334,10 @@ final class SpeechManager: NSObject {
         let now = Date()
         let elapsed = now.timeIntervalSince(startedAt)
 
+        if dictationMode {
+            if elapsed > maxDuration { stop(.endOfSpeech) }
+            return
+        }
         if heardSpeech {
             let quietFor = now.timeIntervalSince(lastPartialAt)
             // Quiet mic ends it quickly; if there's still sound but no new words, give it a bit longer.
@@ -368,7 +385,7 @@ final class SpeechManager: NSObject {
         case .endOfSpeech, .manual:
             if !text.isEmpty, !delivered {
                 delivered = true
-                onFinal?(text)
+                if dictationMode { dictationHandler?(text) } else { onFinal?(text) }
             }
         case .cancelled:
             break

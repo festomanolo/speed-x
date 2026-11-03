@@ -8,6 +8,15 @@ from .mail import MailTool
 from .messaging import MessagingTool
 from .music import MusicTool
 from .notes import NotesTool
+from .productivity import (
+    AgentTool,
+    DictationTool,
+    MeetingTool,
+    RoutineTool,
+    SkillsTool,
+    UITool,
+    UpdateTool,
+)
 from .screen import ScreenTool
 from .system import SystemTool
 from .timer import TimerTool
@@ -30,4 +39,11 @@ __all__ = [
     "MessagingTool",
     "TimerTool",
     "WebTool",
+    "SkillsTool",
+    "RoutineTool",
+    "DictationTool",
+    "MeetingTool",
+    "UpdateTool",
+    "AgentTool",
+    "UITool",
 ]
