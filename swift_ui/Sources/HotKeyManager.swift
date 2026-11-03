@@ -1,13 +1,14 @@
 import AppKit
 import Carbon
 
-/// Global shortcuts: ⌥Space talks to Speed-X, ⌘⇧Space opens it for typing, ⌘⌥P shows / hides the notch.
+/// Global shortcuts: ⌥Space talks to Speed-X, ⌘⇧Space opens it for typing, ⌘⌥P shows / hides the notch, ⌥⇧Space dictates.
 final class HotKeyManager {
     static let shared = HotKeyManager()
     static let notification = Notification.Name("SpeedXHotKey")
     static let voiceID: UInt32 = 1
     static let typeID: UInt32 = 2
     static let toggleID: UInt32 = 3
+    static let dictateID: UInt32 = 4
 
     private var hotKeyRefs: [EventHotKeyRef] = []
 
@@ -32,6 +33,7 @@ final class HotKeyManager {
         register(keyCode: 49, modifiers: UInt32(optionKey), id: Self.voiceID)            // ⌥ Space
         register(keyCode: 49, modifiers: UInt32(cmdKey | shiftKey), id: Self.typeID)     // ⌘ ⇧ Space
         register(keyCode: 35, modifiers: UInt32(cmdKey | optionKey), id: Self.toggleID)  // ⌘ ⌥ P
+        register(keyCode: 49, modifiers: UInt32(optionKey | shiftKey), id: Self.dictateID) // ⌥ ⇧ Space: dictate
     }
 
     private func register(keyCode: UInt32, modifiers: UInt32, id: UInt32) {
