@@ -85,6 +85,12 @@ final class AppModel {
     var preferredDeviceUID: String? = AudioDevices.shared.preferredUID
     var launchAtLogin = LaunchAtLoginManager.shared.isEnabled
 
+    // Assistant features
+    var wakeWordOn = WakeWordListener.shared.enabled
+    var dictationOn = DictationController.shared.enabled
+    var meetingActive = false
+    var updateVersion: String?
+
     /// Last app the user was in before Speed-X (for "close it").
     var lastExternalApp: String?
 
@@ -95,6 +101,50 @@ final class AppModel {
         AudioDevices.shared.onChange = { [weak self] in self?.refreshDevices() }
         wireSpeech()
         wireEngine()
+        WakeWordListener.shared.onWake = { [weak self] in self?.wakeUp() }
+    }
+
+    // MARK: - Assistant features
+
+    /// "Speed X" was heard.
+    func wakeUp() {
+        guard phase != .listening, !SpeechManager.shared.isRecording else { return }
+        if !isShown { isShown = true }
+        startListening()
+        withAnimation(Motion.standard) { open(.assistant, pin: true) }
+    }
+
+    func setWakeWord(_ on: Bool) {
+        let ok = WakeWordListener.shared.setEnabled(on)
+        if on, !ok {
+            errorMessage = "The wake word needs Microphone and Speech Recognition access, and on-device speech recognition (so audio never leaves this Mac)."
+        }
+        wakeWordOn = WakeWordListener.shared.enabled
+    }
+
+    func setDictation(_ on: Bool) {
+        DictationController.shared.enabled = on
+        dictationOn = on
+    }
+
+    func toggleMeeting() { submit(meetingActive ? "end meeting" : "start meeting") }
+    func installUpdate() { submit("install the update") }
+
+    private func note(_ text: String, ok: Bool = true) {
+        history.insert(HistoryItem(command: text, success: ok, summary: "", latencyMs: 0), at: 0)
+        if history.count > 12 { history.removeLast() }
+    }
+
+    private func handleUI(_ action: String?) {
+        switch action {
+        case "draw_start": PenOverlay.shared.start()
+        case "draw_stop": PenOverlay.shared.stop()
+        case "draw_clear": PenOverlay.shared.clear()
+        case "wake_on": setWakeWord(true)
+        case "wake_off": setWakeWord(false)
+        case "permissions": OnboardingWindow.shared.show()
+        default: break
+        }
     }
 
     // MARK: - Derived values for the dock gauges
@@ -174,6 +224,8 @@ final class AppModel {
         let speech = SpeechManager.shared
         speech.onStateChange = { [weak self] recording in
             guard let self else { return }
+            WakeWordListener.shared.setBusy(recording)
+            if SpeechManager.shared.dictationMode { return }   // dictation has its own pill
             if recording {
                 self.phase = .listening
             } else if self.phase == .listening {
