@@ -232,7 +232,10 @@ final class AppModel {
                 self.phase = self.response?.needs_confirmation == true ? .confirming : .idle
             }
         }
-        speech.onLevel = { [weak self] level in self?.micLevel = Double(level) }
+        speech.onLevel = { [weak self] level in
+            self?.micLevel = Double(level)
+            DictationState.shared.level = Double(level)
+        }
         speech.onPartial = { [weak self] text in
             self?.transcript = text
             self?.schedulePreview(text)
@@ -242,6 +245,7 @@ final class AppModel {
             self?.submit(text)
         }
         speech.onError = { [weak self] message in
+            if SpeechManager.shared.dictationMode { DictationState.shared.notice = message; return }
             self?.errorMessage = message
             self?.phase = .idle
         }
@@ -354,6 +358,8 @@ final class AppModel {
             case "ready":
                 self.engineReady = true
                 self.applyStatus(event)
+                EngineClient.shared.dictionary { SpeechManager.shared.addVocabulary($0.hints ?? []) }
+                WakeWordListener.shared.restoreOnLaunch()
             case "status":
                 self.applyStatus(event)
             case "stream":
@@ -361,6 +367,33 @@ final class AppModel {
             case "timer_done":
                 NSSound(named: "Glass")?.play()
                 self.history.insert(HistoryItem(command: "⏰ \(event.label ?? "Timer")", success: true, summary: "Timer finished", latencyMs: 0), at: 0)
+            case "ui":
+                self.handleUI(event.action)
+            case "show_where":
+                ScreenGuide.shared.show(query: event.query ?? "", in: self.lastExternalApp) { [weak self] problem in
+                    if let problem { self?.errorMessage = problem }
+                }
+            case "agent_update":
+                AgentCenter.shared.update(event)
+            case "meeting_state":
+                self.meetingActive = event.active ?? false
+                if self.meetingActive {
+                    if !MeetingCapture.shared.start() {
+                        self.errorMessage = "Meeting notes need on-device speech recognition and microphone access."
+                        EngineClient.shared.run("end meeting", frontApp: nil) { _ in }
+                    }
+                } else {
+                    MeetingCapture.shared.stop()
+                }
+            case "dictionary_changed":
+                SpeechManager.shared.addVocabulary(event.hints ?? [])
+            case "update_available":
+                self.updateVersion = event.version
+            case "routine_done":
+                NSSound(named: "Glass")?.play()
+                self.note("⏱ \(event.command ?? "Routine") — \(event.message ?? "")", ok: event.success ?? true)
+            case "skill_learned":
+                self.note("🧠 Learned “\(event.command ?? "")” — it will run instantly next time")
             default:
                 break
             }
